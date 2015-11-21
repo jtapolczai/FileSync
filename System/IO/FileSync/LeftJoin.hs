@@ -1,8 +1,10 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE LambdaCase #-}
 
 module System.IO.FileSync.LeftJoin where
 
 import Control.Arrow ((&&&))
+import Data.Functor
 import Data.List
 import qualified Data.Map as M
 import qualified Data.Tree as T
@@ -12,36 +14,31 @@ import System.FilePath
 --import Debug.Trace
 import Debug.Trace.Disable
 
--- |A possibly empty tree.
-type Tree a = Maybe (T.Tree a)
+data TreeDiff = LeftOnly | RightOnly | Both
+   deriving (Show, Eq, Ord, Read)
 
-data TreeDiff = Insert | Delete | Identical
-   deriving (Show, Eq, Ord, Read, Enum)
+data EntryType = Directory | File
+   deriving (Show, Eq, Ord, Read)
+
+
+type JoinStrategy =
+   FilePath
+   -> FilePath
+   -> FilePath
+   -> T.Tree (TreeDiff, (FilePath, EntryType))
+   -> IO Bool
 
 -- |Generic join that computer the set of differences between two forests.
---  We take two forests, S and T. First, trees with identical root keys
---  __within__ S and __within__ T are united via a full outer join.
---
--- Then, we match up the trees from S with the trees from T. If a given root
--- key only occurs in the first forest, it's counted as "left only". If it only
--- occurs in the right one, it's counted as "right only". Left only trees
--- are inserted as-is into the result, with the left tag. Same for the right
--- only trees. For trees with identical root keys, we insert one tree
--- with the 'TreeDiff'-value 'Identical' in the root. In its children, we
--- repeat the 'join' function.
---
--- All other joins ('leftJoin', 'rightJoin', 'innerJoin', 'outerJoin') are
--- specialisations of this function.
-join
+--  Ordering of subtrees is __not__ guaranteed. Subtrees with identical
+--  root trees are merged.
+genericJoin
    :: (Ord a, Show a)
-   => TreeDiff -- ^Left tag, for trees/nodes that only occur in S.
-   -> TreeDiff -- ^Right tag, for trees/nodes that only occur in T.
-   -> T.Forest a -- ^The left forest S.
+   => T.Forest a -- ^The left forest S.
    -> T.Forest a -- ^The right forest T.
    -> T.Forest (TreeDiff, a)
-join leftTag rightTag ts ss =
-   map (terminate leftTag) leftOnly
-   ++ map (terminate rightTag) rightOnly
+genericJoin ts ss =
+   map (terminate LeftOnly) leftOnly
+   ++ map (terminate RightOnly) rightOnly
    ++ map continue both
    where
       toMap = M.fromListWith (\x y -> fmap snd $ head $ outerJoin [x] [y])
@@ -59,41 +56,62 @@ join leftTag rightTag ts ss =
 
       pairChildren (T.Node x xs) (T.Node _ ys) = (x,xs,ys)
 
-      continue (x,xs,ys) = T.Node (Identical, x) $ leftJoin xs ys
-      terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (Identical,)) xs
+      continue (x,xs,ys) = T.Node (Both, x) $ leftJoin xs ys
+      terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (Both,)) xs
 
-leftJoin :: (Ord a, Show a) => T.Forest a -> T.Forest a -> T.Forest (TreeDiff,a)
-leftJoin = join Insert Delete
-
-rightJoin :: (Ord a, Show a) => T.Forest a -> T.Forest a -> T.Forest (TreeDiff,a)
-rightJoin = flip leftJoin
-
-innerJoin :: (Ord a, Show a) => T.Forest a -> T.Forest a -> T.Forest (TreeDiff,a)
-innerJoin = join Delete Delete
-
-outerJoin :: (Ord a, Show a) => T.Forest a -> T.Forest a -> T.Forest (TreeDiff,a)
-outerJoin = join Insert Insert
-
-(<//>) root paths = if null paths then root else root </> foldl1' (</>) paths
+leftJoin :: JoinStrategy
+leftJoin source target path (T.Node (LeftOnly, (fp, et))) =
+   applyInsertAction source target (path </> fp) et
+leftJoin source target path (T.Node (RightOnly, (fp, et))) =
+   applyDeleteAction target (path </> fp) et
+leftJoin source target path (T.Node (Both, (fp, et))) = return True
 
 applyDeleteAction
    :: FilePath -- ^Path from which to start (generically a drive or somesuch).
-   -> [FilePath] -- ^Paths in the tree, starting from the root.
+   -> FilePath -- ^Path in the tree, starting from the root.
+   -> EntryType
    -> IO ()
-applyDeleteAction start paths = undefined
+applyDeleteAction start path = undefined
    where
-      path = start <//> paths
+      path = start </> paths
 
 applyInsertAction
    :: FilePath -- ^Prefix of the source path.
    -> FilePath -- ^Prefix of the target path.
-   -> [FilePath] -- ^Paths in the tree, starting from the root.
+   -> FilePath -- ^Path in the tree, starting from the root.
+   -> EntryType
    -> IO ()
-applyInsertAction source target paths = undefined
+applyInsertAction source target path et = undefined
    where
-      sPath = source <//> paths
-      tPath = target <//> paths
+      sPath = source </> path
+      tPath = target </> path
 
+createFileTree
+   :: FilePath
+   -> IO (T.Tree (FilePath, EntryType))
+createFileTree = go ""
+   where
+      go root this =  do
+         thisType <- (\case{True -> File; False -> Directory})
+                     <$> doesFileExist (root </> this)
+         let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
+         contents <- getDirectoryContents (root </> this)
+         (files, dirs) <- partition fst <$> mapM isFile contents
+         let files' = map (\(_,x) -> T.Node (x,File) []) files
+             dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs
+         children <- mapM (go $ root </> this) dirs'
+         return $ T.Node (this, thisType) $ files' ++ children
+
+syncWith
+   :: JoinStrategy
+   -> FilePath
+   -> FilePath
+   -> T.Tree (TreeDiff, a)
+   -> IO ()
+syncWith identHandler source target = undefined -- go
+{-   where
+      go (T.Node (T.Node (Identical, fp))) = do
+         continue <- identHandler  -}
 
 
 t1 = T.Node 1 []

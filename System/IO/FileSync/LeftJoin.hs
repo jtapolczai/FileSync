@@ -173,19 +173,17 @@ noDirFoundException e =
 
 createFileTree
    :: FilePath
-   -> IO (T.Tree (FilePath, EntryType))
+   -> IO (T.Tree FilePath)
 createFileTree = go ""
    where
       go root this =  do
-         thisType <- (\case{True -> File; False -> Directory})
-                     <$> doesFileExist (root </> this)
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
          contents <- getDirectoryContents (root </> this)
          (files, dirs) <- partition fst <$> mapM isFile contents
-         let files' = map (\(_,x) -> T.Node (x,File) []) files
+         let files' = map (\(_,x) -> T.Node x []) files
              dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs
          children <- mapM (go $ root </> this) dirs'
-         return $ T.Node (this, thisType) $ files' ++ children
+         return $ T.Node this $ files' ++ children
 
 syncWith
    :: JoinStrategy b

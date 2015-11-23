@@ -116,12 +116,12 @@ applyDeleteAction
    => src -- |Root S of the source.
    -> FilePath -- ^Path P in the tree, starting from the root.
    -> IO ()
-applyDeleteAction source pathEnd =
+applyDeleteAction src path =
    catchJust noDirFoundException
-            (removeDirectoryRecursive path)
-            (const $ removeFile path)
+            (removeDirectoryRecursive sPath)
+            (const $ removeFile sPath)
    where
-      path = getFilePath source </> pathEnd
+      sPath = getFilePath src </> path
 
 -- |Copies a file or directory. This funciton tries to
 --  to copy the given path as a directory. If that fails,
@@ -135,13 +135,13 @@ applyInsertAction
    -> trg -- |Root T of the target.
    -> FilePath -- ^Path P in the tree, starting from the roots.
    -> IO ()
-applyInsertAction source target path = 
+applyInsertAction src trg path = 
    catchJust noDirFoundException
              (copyDirectory sPath tPath)
              (const $ copyFile sPath tPath)
    where
-      sPath = getFilePath source </> path
-      tPath = getFilePath target </> path
+      sPath = getFilePath src </> path
+      tPath = getFilePath trg </> path
 
 -- |Copies a directory recursively. Tries to copy permissions.
 --  Does not handle exceptions.
@@ -185,13 +185,13 @@ createFileTree = go ""
          children <- mapM (go $ root </> this) dirs'
          return $ T.Node this $ files' ++ children
 
-syncWith
-   :: JoinStrategy b
+syncWithStrategy
+   :: JoinStrategy (IO ())
    -> FilePath
    -> FilePath
    -> T.Tree (TreeDiff, a)
    -> IO ()
-syncWith identHandler source target = undefined -- go
+syncWithStrategy strategy src trg = undefined -- go
 {-   where
       go (T.Node (T.Node (Identical, fp))) = do
          continue <- identHandler  -}

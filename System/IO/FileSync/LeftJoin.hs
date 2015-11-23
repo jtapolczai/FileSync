@@ -39,6 +39,9 @@ type JoinStrategy a =
    -> T.Tree (TreeDiff, FilePath)
    -> IO (Bool, a)
 
+data FileAction = Delete FilePath | Copy FilePath FilePath
+   deriving (Show, Eq, Ord)
+
 -- |Generic join that computer the set of differences between two forests.
 --  Ordering of subtrees is __not__ guaranteed. Subtrees with identical
 --  root trees are merged.

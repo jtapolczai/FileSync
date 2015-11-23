@@ -194,19 +194,29 @@ createDiffTree src trg = (\s t -> head $ genericJoin [s] [t]) <$> createFileTree
 -- |Takes two root directories and synchronizes the tree that starts in them
 --  using a given strategy. The tree's root should be an immediate child of
 --  either the source or the target.
-syncWithStrategy
+syncTrees
    :: (Monoid b)
    => JoinStrategy b
    -> LeftRoot
    -> RightRoot
    -> T.Tree (TreeDiff, FilePath)
    -> IO b
-syncWithStrategy strategy src trg = go ""
+syncTrees strategy src trg = go ""
    where
       go path node@(T.Node (_,x) xs) = do
          (continue, res) <- strategy src trg path node
          if continue then mappend res <$> mconcat <$> mapM (go $ path </> x) xs
                      else return res
+
+-- |Takes two directories and synchronizes them using a given join
+--  strategy. Everything said about 'syncTrees' applies.
+syncDirectories
+   :: Monoid b
+   => JoinStrategy b
+   -> LeftRoot
+   -> RightRoot
+   -> IO b
+syncDirectories strategy src trg = syncTrees strategy src trg =<< createDiffTree src trg
 
 
 t1 = T.Node 1 []

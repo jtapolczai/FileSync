@@ -32,12 +32,12 @@ class FileRoot a where
 instance FileRoot LeftRoot where getFilePath (LR fp) = fp
 instance FileRoot RightRoot where getFilePath (RR fp) = fp
 
-type JoinStrategy =
+type JoinStrategy a =
    LeftRoot
    -> RightRoot
    -> FilePath
    -> T.Tree (TreeDiff, FilePath)
-   -> IO Bool
+   -> IO (Bool, a)
 
 -- |Generic join that computer the set of differences between two forests.
 --  Ordering of subtrees is __not__ guaranteed. Subtrees with identical
@@ -70,40 +70,41 @@ genericJoin ts ss =
       continue (x,xs,ys) = T.Node (Both, x) $ genericJoin xs ys
       terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (Both,)) xs
 
-leftJoin :: JoinStrategy
+leftJoin :: JoinStrategy (IO ())
 leftJoin left right path (T.Node (LeftOnly, fp) _) =
-   applyInsertAction left right (path </> fp) >> return False
+   return (False, applyInsertAction left right $ path </> fp)
 leftJoin _ right path (T.Node (RightOnly, fp) _) =
-   applyDeleteAction right (path </> fp) >> return False
-leftJoin _ _ _ _ = return True
+   return (False, applyDeleteAction right $ path </> fp)
+leftJoin _ _ _ _ = return (True, return ())
 
-rightJoin :: JoinStrategy
-rightJoin left right path (T.Node (LeftOnly, fp) _) =
-   applyInsertAction right left (path </> fp) >> return False
-rightJoin left _ path (T.Node (RightOnly, fp) _) =
-   applyDeleteAction left (path </> fp) >> return False
-rightJoin _ _ _ _ = return True
+rightJoin :: JoinStrategy (IO ())
+rightJoin left _ path (T.Node (LeftOnly, fp) _) =
+   return (False, applyDeleteAction left $ path </> fp)
+rightJoin left right path (T.Node (RightOnly, fp) _) =
+   return (False, applyInsertAction right left $ path </> fp)
+rightJoin _ _ _ _ = return (True, return ())
 
-innerJoin :: JoinStrategy
+innerJoin :: JoinStrategy (IO ())
 innerJoin left _ path (T.Node (LeftOnly, fp) _) =
-   applyDeleteAction left (path </> fp) >> return False
+   return (False, applyDeleteAction left $ path </> fp)
 innerJoin _ right path (T.Node (RightOnly, fp) _) =
-   applyDeleteAction right (path </> fp) >> return False
-innerJoin _ _ _ _ = return True
+   return (False, applyDeleteAction right $ path </> fp)
+innerJoin _ _ _ _ = return (True, return ())
 
-outerJoin :: JoinStrategy
+outerJoin :: JoinStrategy (IO ())
 outerJoin left right path (T.Node (LeftOnly, fp) _) =
-   applyInsertAction left right (path </> fp) >> return False
+   return (False, applyInsertAction left right $ path </> fp)
 outerJoin left right path (T.Node (RightOnly, fp) _) =
-   applyInsertAction right left (path </> fp) >> return False
-outerJoin _ _ _ _ = return True
+   return (False, applyInsertAction right left $ path </> fp)
+outerJoin _ _ _ _ = return (True, return ())
 
+-- |Deletes a 
 applyDeleteAction
    :: FileRoot src
    => src
    -> FilePath -- ^Path in the tree, starting from the roots.
    -> IO ()
-applyDeleteAction start path = undefined
+applyDeleteAction root path = undefined
    where
       --path = start </> paths
 
@@ -135,7 +136,7 @@ createFileTree = go ""
          return $ T.Node (this, thisType) $ files' ++ children
 
 syncWith
-   :: JoinStrategy
+   :: JoinStrategy b
    -> FilePath
    -> FilePath
    -> T.Tree (TreeDiff, a)

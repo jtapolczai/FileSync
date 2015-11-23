@@ -3,11 +3,8 @@
 
 module System.IO.FileSync.LeftJoin where
 
-import Prelude hiding (catch)
-
 import Control.Arrow ((&&&))
 import Control.Exception
-import Data.Functor
 import Data.List
 import qualified Data.Map as M
 import qualified Data.Tree as T
@@ -172,9 +169,10 @@ noDirFoundException e =
    then Just () else Nothing
 
 createFileTree
-   :: FilePath
+   :: FileRoot src
+   => src
    -> IO (T.Tree FilePath)
-createFileTree = go ""
+createFileTree = go "" . getFilePath
    where
       go root this =  do
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
@@ -186,15 +184,18 @@ createFileTree = go ""
          return $ T.Node this $ files' ++ children
 
 syncWithStrategy
-   :: JoinStrategy (IO ())
-   -> FilePath
-   -> FilePath
-   -> T.Tree (TreeDiff, a)
-   -> IO ()
-syncWithStrategy strategy src trg = undefined -- go
-{-   where
-      go (T.Node (T.Node (Identical, fp))) = do
-         continue <- identHandler  -}
+   :: (Monoid b)
+   => JoinStrategy b
+   -> LeftRoot
+   -> RightRoot
+   -> T.Tree (TreeDiff, FilePath)
+   -> IO b
+syncWithStrategy strategy src trg = go ""
+   where
+      go path node@(T.Node (_,x) xs) = do
+         (continue, res) <- strategy src trg path node
+         if continue then mappend res <$> mconcat <$> mapM (go $ path </> x) xs
+                     else return res
 
 
 t1 = T.Node 1 []

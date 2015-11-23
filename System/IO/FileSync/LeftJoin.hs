@@ -143,7 +143,8 @@ applyInsertAction source target path =
       sPath = getFilePath source </> path
       tPath = getFilePath target </> path
 
--- |Copies a directory recursively.
+-- |Copies a directory recursively. Tries to copy permissions.
+--  Does not handle exceptions.
 copyDirectory :: FilePath -> FilePath -> IO ()
 copyDirectory src trg = go ""
    where
@@ -152,12 +153,16 @@ copyDirectory src trg = go ""
       tryCopyRec :: FilePath -> FilePath -> IO ()
       tryCopyRec _ "." = return ()
       tryCopyRec _ ".." = return ()
-      tryCopyRec path cur =
-         catchJust noDirFoundException
-                   (do createDirectory $ trg </> path </> cur
-                       copyPermissions (src </> path </> cur) (trg </> path </> cur)
-                       go $ path </> cur)
-                   (const $ copyFile (src </> path </> cur) (trg </> path </> cur))
+      tryCopyRec path cur = let
+            sPath = src </> path </> cur
+            tPath = trg </> path </> cur
+         in
+            catchJust noDirFoundException
+                     (do createDirectory tPath
+                         copyPermissions sPath tPath
+                         go $ path </> cur)
+                     (\_ -> do copyFile sPath tPath
+                               copyPermissions sPath tPath)
 
 
 -- |Returns a Just iff the exception is of type "DoesNotExist"/"NoSuchThing".

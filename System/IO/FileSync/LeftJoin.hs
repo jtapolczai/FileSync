@@ -20,10 +20,21 @@ data TreeDiff = LeftOnly | RightOnly | Both
 data EntryType = Directory | File
    deriving (Show, Eq, Ord, Read)
 
+newtype LeftRoot = LR FilePath
+   deriving (Show, Eq, Ord)
+
+newtype RightRoot = RR FilePath
+   deriving (Show, Eq, Ord)
+
+class FileRoot a where
+   getFilePath :: a -> FilePath
+
+instance FileRoot LeftRoot where getFilePath (LR fp) = fp
+instance FileRoot RightRoot where getFilePath (RR fp) = fp
 
 type JoinStrategy =
-   FilePath
-   -> FilePath
+   LeftRoot
+   -> RightRoot
    -> FilePath
    -> T.Tree (TreeDiff, FilePath)
    -> IO Bool
@@ -60,50 +71,52 @@ genericJoin ts ss =
       terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (Both,)) xs
 
 leftJoin :: JoinStrategy
-leftJoin source target path (T.Node (LeftOnly, fp) _) =
-   applyInsertAction source target (path </> fp) >> return False
-leftJoin source target path (T.Node (RightOnly, fp) _) =
-   applyDeleteAction target (path </> fp) >> return False
+leftJoin left right path (T.Node (LeftOnly, fp) _) =
+   applyInsertAction left right (path </> fp) >> return False
+leftJoin _ right path (T.Node (RightOnly, fp) _) =
+   applyDeleteAction right (path </> fp) >> return False
 leftJoin _ _ _ _ = return True
 
 rightJoin :: JoinStrategy
-rightJoin source target path (T.Node (LeftOnly, fp) _) =
-   applyInsertAction target source (path </> fp) >> return False
-rightJoin source target path (T.Node (RightOnly, fp) _) =
-   applyDeleteAction source (path </> fp) >> return False
+rightJoin left right path (T.Node (LeftOnly, fp) _) =
+   applyInsertAction right left (path </> fp) >> return False
+rightJoin left _ path (T.Node (RightOnly, fp) _) =
+   applyDeleteAction left (path </> fp) >> return False
 rightJoin _ _ _ _ = return True
 
 innerJoin :: JoinStrategy
-innerJoin source target path (T.Node (LeftOnly, fp) _) =
-   applyDeleteAction source (path </> fp) >> return False
-innerJoin source target path (T.Node (RightOnly, fp) _) =
-   applyDeleteAction target (path </> fp) >> return False
+innerJoin left _ path (T.Node (LeftOnly, fp) _) =
+   applyDeleteAction left (path </> fp) >> return False
+innerJoin _ right path (T.Node (RightOnly, fp) _) =
+   applyDeleteAction right (path </> fp) >> return False
 innerJoin _ _ _ _ = return True
 
 outerJoin :: JoinStrategy
-outerJoin source target path (T.Node (LeftOnly, fp) _) =
-   applyInsertAction source target (path </> fp) >> return False
-outerJoin source target path (T.Node (RightOnly, fp) _) =
-   applyInsertAction target source (path </> fp) >> return False
+outerJoin left right path (T.Node (LeftOnly, fp) _) =
+   applyInsertAction left right (path </> fp) >> return False
+outerJoin left right path (T.Node (RightOnly, fp) _) =
+   applyInsertAction right left (path </> fp) >> return False
 outerJoin _ _ _ _ = return True
 
 applyDeleteAction
-   :: FilePath -- ^Path from which to start (generically a drive or somesuch).
-   -> FilePath -- ^Path in the tree, starting from the root.
+   :: FileRoot src
+   => src
+   -> FilePath -- ^Path in the tree, starting from the roots.
    -> IO ()
 applyDeleteAction start path = undefined
    where
       --path = start </> paths
 
 applyInsertAction
-   :: FilePath -- ^Prefix of the source path.
-   -> FilePath -- ^Prefix of the target path.
-   -> FilePath -- ^Path in the tree, starting from the root.
+   :: (FileRoot src, FileRoot trg)
+   => src
+   -> trg
+   -> FilePath -- ^Path in the tree, starting from the roots.
    -> IO ()
 applyInsertAction source target path = undefined
    where
-      sPath = source </> path
-      tPath = target </> path
+      sPath = getFilePath source </> path
+      tPath = getFilePath target </> path
 
 createFileTree
    :: FilePath

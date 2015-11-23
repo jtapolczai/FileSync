@@ -3,13 +3,17 @@
 
 module System.IO.FileSync.LeftJoin where
 
+import Prelude hiding (catch)
+
 import Control.Arrow ((&&&))
+import Control.Exception
 import Data.Functor
 import Data.List
 import qualified Data.Map as M
 import qualified Data.Tree as T
 import System.Directory
 import System.FilePath
+import System.IO.Error
 
 --import Debug.Trace
 import Debug.Trace.Disable
@@ -101,16 +105,27 @@ outerJoin left right path (T.Node (RightOnly, fp) _) =
    return (False, applyInsertAction right left $ path </> fp)
 outerJoin _ _ _ _ = return (True, return ())
 
--- |Deletes a 
+-- |Deletes a file or directory. Does not handle exceptions.
+--  If a directory with the given name exists, it will be removed
+--  an no further action will be taken. If no such directory exists,
+--  but a file with the given name exists, the file will be removed.
 applyDeleteAction
    :: FileRoot src
    => src
-   -> FilePath -- ^Path in the tree, starting from the roots.
+   -> FilePath -- ^Path in the tree, starting from the root.
    -> IO ()
-applyDeleteAction root path = undefined
+applyDeleteAction source pathEnd =
+   catchJust noDirFoundException
+            (removeDirectoryRecursive path)
+            (const $ removeFile path)
    where
-      --path = start </> paths
+      path = getFilePath source </> pathEnd
 
+      noDirFoundException e =
+         if isDoesNotExistErrorType (ioeGetErrorType e)
+         then Just () else Nothing
+
+-- |Copies a file or directory.
 applyInsertAction
    :: (FileRoot src, FileRoot trg)
    => src

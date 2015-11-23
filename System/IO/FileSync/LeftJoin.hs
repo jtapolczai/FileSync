@@ -41,7 +41,7 @@ genericJoin ts ss =
    ++ map (terminate RightOnly) rightOnly
    ++ map continue both
    where
-      toMap = M.fromListWith (\x y -> fmap snd $ head $ outerJoin [x] [y])
+      toMap = M.fromListWith (\x y -> fmap snd $ head $ genericJoin [x] [y])
               . map (T.rootLabel &&& id)
 
       -- convert lists of children to maps for effient difference/intersection
@@ -56,15 +56,19 @@ genericJoin ts ss =
 
       pairChildren (T.Node x xs) (T.Node _ ys) = (x,xs,ys)
 
-      continue (x,xs,ys) = T.Node (Both, x) $ leftJoin xs ys
+      continue (x,xs,ys) = T.Node (Both, x) $ genericJoin xs ys
       terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (Both,)) xs
 
 leftJoin :: JoinStrategy
-leftJoin source target path (T.Node (LeftOnly, (fp, et))) =
+leftJoin source target path (T.Node (LeftOnly, (fp, et)) xs) = do
    applyInsertAction source target (path </> fp) et
-leftJoin source target path (T.Node (RightOnly, (fp, et))) =
+   mapM_ (leftJoin source target (path </> fp)) xs
+   return False
+leftJoin source target path (T.Node (RightOnly, (fp, et)) xs) = do
    applyDeleteAction target (path </> fp) et
-leftJoin source target path (T.Node (Both, (fp, et))) = return True
+   mapM_ (leftJoin source target (path </> fp)) xs
+   return False
+leftJoin source target path (T.Node _ _) = return True
 
 applyDeleteAction
    :: FilePath -- ^Path from which to start (generically a drive or somesuch).
@@ -73,7 +77,7 @@ applyDeleteAction
    -> IO ()
 applyDeleteAction start path = undefined
    where
-      path = start </> paths
+      --path = start </> paths
 
 applyInsertAction
    :: FilePath -- ^Prefix of the source path.

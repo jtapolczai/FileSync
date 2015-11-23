@@ -168,6 +168,7 @@ noDirFoundException e =
    if isDoesNotExistErrorType (ioeGetErrorType e)
    then Just () else Nothing
 
+-- |Takes a root directory and creates a tree representing its structure.
 createFileTree
    :: FileRoot src
    => src
@@ -183,6 +184,16 @@ createFileTree = go "" . getFilePath
          children <- mapM (go $ root </> this) dirs'
          return $ T.Node this $ files' ++ children
 
+-- |Creates a difference tree between two directories.
+createDiffTree
+   :: LeftRoot
+   -> RightRoot
+   -> IO (T.Tree (TreeDiff, FilePath))
+createDiffTree src trg = (\s t -> head $ genericJoin [s] [t]) <$> createFileTree src <*> createFileTree trg
+
+-- |Takes two root directories and synchronizes the tree that starts in them
+--  using a given strategy. The tree's root should be an immediate child of
+--  either the source or the target.
 syncWithStrategy
    :: (Monoid b)
    => JoinStrategy b

@@ -106,13 +106,15 @@ outerJoin left right path (T.Node (RightOnly, fp) _) =
 outerJoin _ _ _ _ = return (True, return ())
 
 -- |Deletes a file or directory. Does not handle exceptions.
---  If a directory with the given name exists, it will be removed
---  an no further action will be taken. If no such directory exists,
---  but a file with the given name exists, the file will be removed.
+--  This function tries to remove the target of the given path
+--  as a directory. If that fails, it tries to remove it as a
+--  file.
+--
+--  The path to remove is given by @S </> P@.
 applyDeleteAction
    :: FileRoot src
-   => src
-   -> FilePath -- ^Path in the tree, starting from the root.
+   => src -- |Root S of the source.
+   -> FilePath -- ^Path P in the tree, starting from the root.
    -> IO ()
 applyDeleteAction source pathEnd =
    catchJust noDirFoundException
@@ -121,21 +123,48 @@ applyDeleteAction source pathEnd =
    where
       path = getFilePath source </> pathEnd
 
-      noDirFoundException e =
-         if isDoesNotExistErrorType (ioeGetErrorType e)
-         then Just () else Nothing
-
--- |Copies a file or directory.
+-- |Copies a file or directory. This funciton tries to
+--  to copy the given path as a directory. If that fails,
+--  it tries to copy it as a file.
+--
+--  The source is given by @S </> P@. The target is given
+--  by @T </> P@.
 applyInsertAction
    :: (FileRoot src, FileRoot trg)
-   => src
-   -> trg
-   -> FilePath -- ^Path in the tree, starting from the roots.
+   => src -- |Root S of the source.
+   -> trg -- |Root T of the target.
+   -> FilePath -- ^Path P in the tree, starting from the roots.
    -> IO ()
-applyInsertAction source target path = undefined
+applyInsertAction source target path = 
+   catchJust noDirFoundException
+             (copyDirectory sPath tPath)
+             (const $ copyFile sPath tPath)
    where
       sPath = getFilePath source </> path
       tPath = getFilePath target </> path
+
+-- |Copies a directory recursively.
+copyDirectory :: FilePath -> FilePath -> IO ()
+copyDirectory src trg = go ""
+   where
+      go path = getDirectoryContents (src </> path) >>= mapM_ (tryCopyRec path)
+
+      tryCopyRec :: FilePath -> FilePath -> IO ()
+      tryCopyRec _ "." = return ()
+      tryCopyRec _ ".." = return ()
+      tryCopyRec path cur =
+         catchJust noDirFoundException
+                   (do createDirectory $ trg </> path </> cur
+                       copyPermissions (src </> path </> cur) (trg </> path </> cur)
+                       go $ path </> cur)
+                   (const $ copyFile (src </> path </> cur) (trg </> path </> cur))
+
+
+-- |Returns a Just iff the exception is of type "DoesNotExist"/"NoSuchThing".
+noDirFoundException :: IOError -> Maybe ()
+noDirFoundException e =
+   if isDoesNotExistErrorType (ioeGetErrorType e)
+   then Just () else Nothing
 
 createFileTree
    :: FilePath

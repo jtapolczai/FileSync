@@ -25,7 +25,7 @@ type JoinStrategy =
    FilePath
    -> FilePath
    -> FilePath
-   -> T.Tree (TreeDiff, (FilePath, EntryType))
+   -> T.Tree (TreeDiff, FilePath)
    -> IO Bool
 
 -- |Generic join that computer the set of differences between two forests.
@@ -60,20 +60,36 @@ genericJoin ts ss =
       terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (Both,)) xs
 
 leftJoin :: JoinStrategy
-leftJoin source target path (T.Node (LeftOnly, (fp, et)) xs) = do
-   applyInsertAction source target (path </> fp) et
-   mapM_ (leftJoin source target (path </> fp)) xs
-   return False
-leftJoin source target path (T.Node (RightOnly, (fp, et)) xs) = do
-   applyDeleteAction target (path </> fp) et
-   mapM_ (leftJoin source target (path </> fp)) xs
-   return False
-leftJoin source target path (T.Node _ _) = return True
+leftJoin source target path (T.Node (LeftOnly, fp) _) =
+   applyInsertAction source target (path </> fp) >> return False
+leftJoin source target path (T.Node (RightOnly, fp) _) =
+   applyDeleteAction target (path </> fp) >> return False
+leftJoin _ _ _ _ = return True
+
+rightJoin :: JoinStrategy
+rightJoin source target path (T.Node (LeftOnly, fp) _) =
+   applyInsertAction target source (path </> fp) >> return False
+rightJoin source target path (T.Node (RightOnly, fp) _) =
+   applyDeleteAction source (path </> fp) >> return False
+rightJoin _ _ _ _ = return True
+
+innerJoin :: JoinStrategy
+innerJoin source target path (T.Node (LeftOnly, fp) _) =
+   applyDeleteAction source (path </> fp) >> return False
+innerJoin source target path (T.Node (RightOnly, fp) _) =
+   applyDeleteAction target (path </> fp) >> return False
+innerJoin _ _ _ _ = return True
+
+outerJoin :: JoinStrategy
+outerJoin source target path (T.Node (LeftOnly, fp) _) =
+   applyInsertAction source target (path </> fp) >> return False
+outerJoin source target path (T.Node (RightOnly, fp) _) =
+   applyInsertAction target source (path </> fp) >> return False
+outerJoin _ _ _ _ = return True
 
 applyDeleteAction
    :: FilePath -- ^Path from which to start (generically a drive or somesuch).
    -> FilePath -- ^Path in the tree, starting from the root.
-   -> EntryType
    -> IO ()
 applyDeleteAction start path = undefined
    where
@@ -83,9 +99,8 @@ applyInsertAction
    :: FilePath -- ^Prefix of the source path.
    -> FilePath -- ^Prefix of the target path.
    -> FilePath -- ^Path in the tree, starting from the root.
-   -> EntryType
    -> IO ()
-applyInsertAction source target path et = undefined
+applyInsertAction source target path = undefined
    where
       sPath = source </> path
       tPath = target </> path

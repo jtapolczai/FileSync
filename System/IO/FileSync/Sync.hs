@@ -3,6 +3,7 @@
 
 module System.IO.FileSync.Sync where
 
+import Control.Monad
 import Data.List
 import qualified Data.Tree as T
 import System.Directory
@@ -11,12 +12,13 @@ import System.FilePath
 import System.IO.FileSync.Join
 import System.IO.FileSync.Types
 
--- |Takes a root directory and creates a tree representing its structure.
+-- |Takes a root directory and creates a tree representing its structure,
+--  starting with the immediate children.
 createFileTree
    :: FileRoot src
    => src
-   -> IO (T.Tree FilePath)
-createFileTree = go "" . getFilePath
+   -> IO (T.Forest FilePath)
+createFileTree src = T.subForest <$> go "" (getFilePath src)
    where
       go root this =  do
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
@@ -28,11 +30,13 @@ createFileTree = go "" . getFilePath
          return $ T.Node this $ files' ++ children
 
 -- |Creates a difference tree between two directories.
+--  The roots themselves will not be included in the resultant tree,
+--  only their children.
 createDiffTree
    :: LeftRoot
    -> RightRoot
-   -> IO (T.Tree (TreeDiff, FilePath))
-createDiffTree src trg = (\s t -> head $ genericJoin [s] [t]) <$> createFileTree src <*> createFileTree trg
+   -> IO (T.Forest (TreeDiff, FilePath))
+createDiffTree src trg = genericJoin <$> createFileTree src <*> createFileTree trg
 
 -- |Takes two root directories and synchronizes the tree that starts in them
 --  using a given strategy. The tree's root should be an immediate child of
@@ -59,4 +63,6 @@ syncDirectories
    -> LeftRoot
    -> RightRoot
    -> IO b
-syncDirectories strategy src trg = syncTrees strategy src trg =<< createDiffTree src trg
+syncDirectories strategy src trg = createDiffTree src trg >>= sync'
+   where
+      sync' = mapM (syncTrees strategy src trg) >=> return . mconcat

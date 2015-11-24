@@ -1,3 +1,5 @@
+***STATUS: not feature-complete.***
+
 # FileSync
 An utility for synchronizing directories.
 

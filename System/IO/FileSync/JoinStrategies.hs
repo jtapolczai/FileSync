@@ -8,12 +8,17 @@ module System.IO.FileSync.JoinStrategies where
 import Control.Exception
 import qualified Data.Sequence as S
 import qualified Data.Tree as T
-import System.Directory
+import System.Directory (getDirectoryContents)
 import System.FilePath
 import System.IO.Error
 import System.REPL (ask', typeAsker)
 
 import System.IO.FileSync.Types
+
+-- |Uncomment this line to mock writing IO functions.
+import System.IO.Mock
+-- |Uncomment this line to use real writing IO functions.
+-- import System.Directory
 
 -- Simple joins
 -------------------------------------------------------------------------------

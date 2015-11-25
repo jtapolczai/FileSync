@@ -2,25 +2,30 @@
 
 module System.IO.FileSync.CLI where
 
+import Prelude hiding (putStrLn)
+
+import Control.Exception (IOException)
+import Control.Monad.Catch
+import Control.Monad.IO.Class
 import qualified Data.Map as M
 import qualified Data.Text.Lazy as TL
 import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
+import System.IO.FileSync.Types
 import System.REPL
 import System.REPL.Command
 
-main :: IO ()
-main = 
+maim :: IO ()
+maim = makeREPL commands
+                      cmdExit
+                      cmdUnknown
+                      prompt
+                      [Handler unknownCommandHandler,
+                       Handler otherIOErrorHandler]
    where
       commands = [cmdSync, cmdList, cmdHelp]
 
-      repl = makeREPL commands
-                      cmdExit
-                      cmdUnknown
-                      (prompt "> ")
-                      (---handler---)
-
-      cmdSync = makeCommand2
+      cmdSync = makeCommand3
          ":[s]ync"
          (flip elem [":s", ":sync"] . TL.strip)
          "Synchronizes two directories."
@@ -28,7 +33,7 @@ main =
          dirAsker
          dirAsker
          joinStrategyAsker
-         (\_ src trg strat -> )
+         (\_ src trg strat -> undefined)
 
       cmdList = makeCommand
          ":[l]ist"
@@ -63,10 +68,20 @@ main =
       verbatimAsker :: Monad m => Asker m Verbatim
       verbatimAsker = typeAsker "" "BUG: Couldn't parse argument."
 
-      joinStrategyAsker :: MonadIO m => Asker m (TL.Text, JoinStrategy)
+      dirAsker :: MonadIO m => Asker m FilePath
+      dirAsker = undefined
+
+      joinStrategyAsker :: MonadIO m => Asker m (TL.Text, JoinStrategy (IO ()))
       joinStrategyAsker = undefined
 
-joinStrategies :: M.Map TL.Text JoinStrategy
+      unknownCommandHandler :: SomeCommandError -> IO ()
+      unknownCommandHandler _ = putStrLn ("Malformed command :(" :: String)
+
+      otherIOErrorHandler :: IOException -> IO ()
+      otherIOErrorHandler _ = putStrLn ("IO exception! :(" :: String)
+
+
+joinStrategies :: M.Map TL.Text (JoinStrategy (IO ()))
 joinStrategies = M.fromList
    [("simpleLeft", simpleLeftJoin),
     ("simpleRight", simpleRightJoin)]

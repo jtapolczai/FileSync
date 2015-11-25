@@ -4,6 +4,7 @@ import qualified Data.Tree as T
 
 import Debug.Trace
 
+import System.IO.FileSync.CLI
 import System.IO.FileSync.Types
 import System.IO.FileSync.Join
 import System.IO.FileSync.Sync

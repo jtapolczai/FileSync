@@ -8,12 +8,12 @@ import Control.Exception (IOException)
 import Control.Monad.Catch
 import Control.Monad.IO.Class
 import qualified Data.Map as M
-import qualified Data.Text.Lazy as TL
+import qualified Data.Text as T
 import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 import System.REPL
-import System.REPL.Command
+import System.REPL.Prompt
 
 maim :: IO ()
 maim = makeREPL commands
@@ -27,7 +27,7 @@ maim = makeREPL commands
 
       cmdSync = makeCommand3
          ":[s]ync"
-         (flip elem [":s", ":sync"] . TL.strip)
+         (flip elem [":s", ":sync"] . T.strip)
          "Synchronizes two directories."
          True
          dirAsker
@@ -37,19 +37,19 @@ maim = makeREPL commands
 
       cmdList = makeCommand
          ":[l]ist"
-         (flip elem [":l", ":list"] . TL.strip)
+         (flip elem [":l", ":list"] . T.strip)
          "List availble join strategies."
          (const . mapM_ putStrLn . M.keys $ joinStrategies)
 
       cmdHelp = makeCommand
          ":[h]elp"
-         (flip elem [":h", ":help"] . TL.strip)
+         (flip elem [":h", ":help"] . T.strip)
          "Prints this help text."
          (const $ summarizeCommands commands)
 
       cmdExit = makeCommandN
          ":[e]xit"
-         (flip elem [":e", ":exit"] . TL.strip)
+         (flip elem [":e", ":exit"] . T.strip)
          ("Exits the program.")
          False
          []
@@ -63,15 +63,15 @@ maim = makeREPL commands
          False
          []
          (repeat verbatimAsker)
-         (\t _ -> putStrLn $ "Unknown command " ++ TL.unpack t ++ ".")
+         (\t _ -> putStrLn $ "Unknown command " ++ T.unpack t ++ ".")
 
-      verbatimAsker :: Monad m => Asker m Verbatim
-      verbatimAsker = typeAsker "" "BUG: Couldn't parse argument."
+      verbatimAsker :: Applicative m => Asker' m Verbatim
+      verbatimAsker = typeAsker "" (const "BUG: Couldn't parse argument.")
 
-      dirAsker :: MonadIO m => Asker m FilePath
+      dirAsker :: MonadIO m => Asker' m FilePath
       dirAsker = undefined
 
-      joinStrategyAsker :: MonadIO m => Asker m (TL.Text, JoinStrategy (IO ()))
+      joinStrategyAsker :: MonadIO m => Asker m T.Text (T.Text, JoinStrategy (IO ()))
       joinStrategyAsker = undefined
 
       unknownCommandHandler :: SomeCommandError -> IO ()
@@ -81,7 +81,7 @@ maim = makeREPL commands
       otherIOErrorHandler _ = putStrLn ("IO exception! :(" :: String)
 
 
-joinStrategies :: M.Map TL.Text (JoinStrategy (IO ()))
+joinStrategies :: M.Map T.Text (JoinStrategy (IO ()))
 joinStrategies = M.fromList
    [("simpleLeft", simpleLeftJoin),
     ("simpleRight", simpleRightJoin)]

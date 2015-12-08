@@ -95,7 +95,7 @@ performSummaryJoin left right actions = do
    putStrLn $ "Right directory: " ++ getFilePath right
    mapM (putStrLn . showFileAction) actions
    putStrLn "Are you SURE (y/n)?"
-   (answer :: YesNo) <- ask' $ typeAsker "Are you SURE (y/n)?" "Enter y for \"yes\" and n for \"no\"."
+   (answer :: YesNo) <- ask' $ typeAsker "Are you SURE (y/n)?" (const "Enter y for \"yes\" and n for \"no\".")
    case answer of
       Yes -> mapM (performFileAction left right) actions >> return True
       No -> putStrLn "Doing nothing." >> return False

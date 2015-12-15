@@ -7,85 +7,125 @@ import Prelude hiding (putStrLn)
 import Control.Exception (IOException)
 import Control.Monad.Catch
 import Control.Monad.IO.Class
+import Control.Monad.Trans.State
+import Data.Functor.Monadic
 import qualified Data.Map as M
+import Data.Monoid
+import qualified Data.Sequence as S
 import qualified Data.Text as T
 import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 import System.REPL
-import System.REPL.Prompt
+import System.REPL.Prompt (putStrLn, prompt)
+import System.REPL.Types (PathExistenceType(..))
+
+type AppState = [FilePath]
+type Cmd = Command (StateT AppState IO) T.Text ()
 
 maim :: IO ()
-maim = makeREPL commands
-                      cmdExit
-                      cmdUnknown
-                      prompt
+maim = evalStateT repl []
+   where
+      repl = makeREPL commands cmdExit cmdUnknown prompt
                       [Handler unknownCommandHandler,
                        Handler otherIOErrorHandler]
-   where
-      commands = [cmdSync, cmdList, cmdHelp]
 
+      commands = [cmdSync, cmdList, cmdExcl, cmdHelp]
+
+      cmdSync :: Cmd
       cmdSync = makeCommand3
          ":[s]ync"
-         (flip elem [":s", ":sync"] . T.strip)
+         (defCommandTest [":s", ":sync"])
          "Synchronizes two directories."
          True
-         dirAsker
-         dirAsker
+         (dirAsker "Enter source directory: ")
+         (dirAsker "Enter target directory: ")
          joinStrategyAsker
          (\_ src trg strat -> undefined)
 
+      cmdList :: Cmd
       cmdList = makeCommand
          ":[l]ist"
          (flip elem [":l", ":list"] . T.strip)
          "List availble join strategies."
-         (const . mapM_ putStrLn . M.keys $ joinStrategies)
+         (const . mapM_ (liftIO . putStrLn) . M.keys $ joinStrategies)
 
+      cmdExcl :: Cmd
+      cmdExcl = makeCommand1
+         ":e[x]clude"
+         (defCommandTest [":exclude", ":x"])
+         "Sets a list of excluded directories (file format: one filepath per line)."
+         False
+         (existentFileAsker "Enter exlusions file: ")
+         (\_ fp -> liftIO (readFile fp) >$> lines >>= put)
+
+      cmdHelp :: Cmd
       cmdHelp = makeCommand
          ":[h]elp"
-         (flip elem [":h", ":help"] . T.strip)
+         (defCommandTest [":h", ":help"])
          "Prints this help text."
          (const $ summarizeCommands commands)
 
+      cmdExit :: Cmd
       cmdExit = makeCommandN
          ":[e]xit"
-         (flip elem [":e", ":exit"] . T.strip)
+         (defCommandTest [":e", ":exit"])
          ("Exits the program.")
          False
          []
-         (repeat verbatimAsker)
+         (repeat lineAsker)
          (\_ _ -> return ())
 
+      cmdUnknown :: Cmd
       cmdUnknown = makeCommandN
          "Unknown"
          (const True)
          "Unknown command."
          False
          []
-         (repeat verbatimAsker)
-         (\t _ -> putStrLn $ "Unknown command " ++ T.unpack t ++ ".")
-
-      verbatimAsker :: Applicative m => Asker' m Verbatim
-      verbatimAsker = typeAsker "" (const "BUG: Couldn't parse argument.")
+         (repeat lineAsker)
+         (\t _ -> liftIO $ putStrLn $ "Unknown command " ++ T.unpack t ++ ".")
 
       dirAsker :: MonadIO m => T.Text -> Asker' m FilePath
-      dirAsker pr = writableFilepathAsker pr ()
+      dirAsker pr = writablefilepathAsker pr
+                       (\fp -> genericTypeError $ errMsg fp)
+                       (\(ex, fp) -> return $ if ex == IsDirectory then Right fp
+                                              else Left $ genericPredicateError $ errMsg fp)
+         where
+            errMsg = (<> " is not a valid, writable directory.") . T.pack
+
+      existentFileAsker :: MonadIO m => T.Text -> Asker' m FilePath
+      existentFileAsker pr = writablefilepathAsker pr
+                              (\fp -> genericTypeError $ errMsg fp)
+                              (\(ex, fp) -> return $ if ex == IsFile then Right fp
+                                                     else Left $ genericPredicateError $ errMsg fp)
+         where
+            errMsg = (<> " could not be read.") . T.pack
 
       joinStrategyAsker :: MonadIO m => Asker m T.Text (T.Text, JoinStrategy (IO ()))
       joinStrategyAsker = undefined
 
-      unknownCommandHandler :: SomeCommandError -> IO ()
-      unknownCommandHandler _ = putStrLn ("Malformed command :(" :: String)
+      unknownCommandHandler :: SomeCommandError -> StateT AppState IO ()
+      unknownCommandHandler _ = liftIO $ putStrLn ("Malformed command.":: String)
 
-      otherIOErrorHandler :: IOException -> IO ()
-      otherIOErrorHandler _ = putStrLn ("IO exception! :(" :: String)
-
+      otherIOErrorHandler :: IOException -> StateT AppState IO ()
+      otherIOErrorHandler _ = liftIO $ putStrLn ("IO exception!" :: String)
 
 joinStrategies :: M.Map T.Text (JoinStrategy (IO ()))
 joinStrategies = M.fromList
    [("simpleLeft", simpleLeftJoin),
-    ("simpleRight", simpleRightJoin)]
-    -- rest: todo
+    ("simpleRight", simpleRightJoin),
+    ("simpleInner", simpleInnerJoin),
+    ("simpleOuter", simpleOuterJoin),
 
+    ("summaryLeft", runSummaryJoin summaryLeftJoin),
+    ("summaryRight", runSummaryJoin summaryRightJoin),
+    ("summaryInner", runSummaryJoin summaryInnerJoin),
+    ("summaryOuter", runSummaryJoin summaryOuterJoin)
+   ]
 
-
+runSummaryJoin :: JoinStrategy (S.Seq FileAction) -> JoinStrategy (IO ())
+runSummaryJoin j lr rr fp t = do
+   (b,s) <- j lr rr fp t
+   performSummaryJoin lr rr s
+   return (b, return ())

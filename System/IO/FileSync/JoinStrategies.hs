@@ -15,13 +15,16 @@ module System.IO.FileSync.JoinStrategies (
    summaryRightJoin,
    summaryInnerJoin,
    summaryOuterJoin,
+   -- ** Utility functions for summary joins
    performFileAction,
    performSummaryJoin,
+   showFileAction,
    ) where
 
 import Control.Exception
 import qualified Data.Sequence as S
-import qualified Data.Tree as T
+import qualified Data.Text as T
+import qualified Data.Tree as Tr
 import System.Directory (getDirectoryContents)
 import System.FilePath
 import System.IO.Error
@@ -39,33 +42,33 @@ import System.IO.Mock
 
 -- |Left join. Performs all copying/deletions immediately.
 simpleLeftJoin :: JoinStrategy (IO ())
-simpleLeftJoin left right path (T.Node (LeftOnly, fp) _) =
+simpleLeftJoin left right path (Tr.Node (LeftOnly, fp) _) =
    return (False, applyInsertAction left right $ path </> fp)
-simpleLeftJoin _ right path (T.Node (RightOnly, fp) _) =
+simpleLeftJoin _ right path (Tr.Node (RightOnly, fp) _) =
    return (False, applyDeleteAction right $ path </> fp)
 simpleLeftJoin _ _ _ _ = return (True, return ())
 
 -- |Right join. Performs all copying/deletions immediately.
 simpleRightJoin :: JoinStrategy (IO ())
-simpleRightJoin left _ path (T.Node (LeftOnly, fp) _) =
+simpleRightJoin left _ path (Tr.Node (LeftOnly, fp) _) =
    return (False, applyDeleteAction left $ path </> fp)
-simpleRightJoin left right path (T.Node (RightOnly, fp) _) =
+simpleRightJoin left right path (Tr.Node (RightOnly, fp) _) =
    return (False, applyInsertAction right left $ path </> fp)
 simpleRightJoin _ _ _ _ = return (True, return ())
 
 -- |Inner join. Performs all copying/deletions immediately.
 simpleInnerJoin :: JoinStrategy (IO ())
-simpleInnerJoin left _ path (T.Node (LeftOnly, fp) _) =
+simpleInnerJoin left _ path (Tr.Node (LeftOnly, fp) _) =
    return (False, applyDeleteAction left $ path </> fp)
-simpleInnerJoin _ right path (T.Node (RightOnly, fp) _) =
+simpleInnerJoin _ right path (Tr.Node (RightOnly, fp) _) =
    return (False, applyDeleteAction right $ path </> fp)
 simpleInnerJoin _ _ _ _ = return (True, return ())
 
 -- |Full outer join. Performs all copying/deletions immediately.
 simpleOuterJoin :: JoinStrategy (IO ())
-simpleOuterJoin left right path (T.Node (LeftOnly, fp) _) =
+simpleOuterJoin left right path (Tr.Node (LeftOnly, fp) _) =
    return (False, applyInsertAction left right $ path </> fp)
-simpleOuterJoin left right path (T.Node (RightOnly, fp) _) =
+simpleOuterJoin left right path (Tr.Node (RightOnly, fp) _) =
    return (False, applyInsertAction right left $ path </> fp)
 simpleOuterJoin _ _ _ _ = return (True, return ())
 
@@ -78,9 +81,9 @@ summaryJoin
    :: (FilePath -> FileAction) -- ^Action for "left only" parts.
    -> (FilePath -> FileAction) -- ^Action for "right only" parts.
    -> JoinStrategy (S.Seq FileAction)
-summaryJoin lA _ _ _ path (T.Node (LeftOnly, fp) _) =
+summaryJoin lA _ _ _ path (Tr.Node (LeftOnly, fp) _) =
    return (False, S.singleton $ lA $ path </> fp)
-summaryJoin _ rA _ _ path (T.Node (RightOnly, fp) _) =
+summaryJoin _ rA _ _ path (Tr.Node (RightOnly, fp) _) =
    return (False, S.singleton $ rA $ path </> fp)
 summaryJoin _ _ _ _ _ _ = return (True, S.empty)
 
@@ -109,10 +112,18 @@ performSummaryJoin left right actions = do
    putStrLn $ "Right directory: " ++ getFilePath right
    mapM (putStrLn . showFileAction) actions
    putStrLn "Are you SURE (y/n)?"
-   (answer :: YesNo) <- ask' $ typeAsker "Are you SURE (y/n)?" (const $ genericTypeError "Enter y for \"yes\" and n for \"no\".")
+   (answer :: YesNo) <- ask' yesNoAsker
    case answer of
       Yes -> mapM (performFileAction left right) actions >> return True
       No -> putStrLn "Doing nothing." >> return False
+
+yesNoAsker :: Monad m => Asker m T.Text YesNo
+yesNoAsker = predAsker
+   "Perform these actions (y/n)?"
+   (\t -> return $ if elem (T.strip t) ["y","Y"] then Right Yes
+                   else if elem (T.strip t) ["n","N"] then Right No
+                   else Left $ genericPredicateError "Expected y/n.")
+
 
 -- |Shows a 'FileAction' as a short line.
 --  The path is printed, along with a code:

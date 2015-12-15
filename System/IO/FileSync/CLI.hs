@@ -68,8 +68,8 @@ maim = makeREPL commands
       verbatimAsker :: Applicative m => Asker' m Verbatim
       verbatimAsker = typeAsker "" (const "BUG: Couldn't parse argument.")
 
-      dirAsker :: MonadIO m => Asker' m FilePath
-      dirAsker = undefined
+      dirAsker :: MonadIO m => T.Text -> Asker' m FilePath
+      dirAsker pr = writableFilepathAsker pr ()
 
       joinStrategyAsker :: MonadIO m => Asker m T.Text (T.Text, JoinStrategy (IO ()))
       joinStrategyAsker = undefined

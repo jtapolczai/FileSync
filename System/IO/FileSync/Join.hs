@@ -39,3 +39,9 @@ genericJoin ts ss =
 
       continue (x,xs,ys) = T.Node (Both, x) $ genericJoin xs ys
       terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (Both,)) xs
+
+-- |Filters out all sub-trees whose roots fail a predicate.
+filterForest :: (a -> Bool) -> T.Forest a -> T.Forest a
+filterForest pred = map filterForest' . filter (pred . T.rootLabel)
+   where
+      filterForest' (T.Node x xs) = T.Node x $ filterForest pred xs

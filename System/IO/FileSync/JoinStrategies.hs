@@ -41,36 +41,36 @@ import System.IO.Mock
 -------------------------------------------------------------------------------
 
 -- |Left join. Performs all copying/deletions immediately.
-simpleLeftJoin :: JoinStrategy (IO ())
+simpleLeftJoin :: JoinStrategy ()
 simpleLeftJoin left right path (Tr.Node (LeftOnly, fp) _) =
-   return (False, applyInsertAction left right $ path </> fp)
+   applyInsertAction left right (path </> fp) >> return (False, ())
 simpleLeftJoin _ right path (Tr.Node (RightOnly, fp) _) =
-   return (False, applyDeleteAction right $ path </> fp)
-simpleLeftJoin _ _ _ _ = return (True, return ())
+   applyDeleteAction right (path </> fp) >> return (False, ())
+simpleLeftJoin _ _ _ _ = return (True, ())
 
 -- |Right join. Performs all copying/deletions immediately.
-simpleRightJoin :: JoinStrategy (IO ())
+simpleRightJoin :: JoinStrategy ()
 simpleRightJoin left _ path (Tr.Node (LeftOnly, fp) _) =
-   return (False, applyDeleteAction left $ path </> fp)
+   applyDeleteAction left (path </> fp) >> return (False, ())
 simpleRightJoin left right path (Tr.Node (RightOnly, fp) _) =
-   return (False, applyInsertAction right left $ path </> fp)
-simpleRightJoin _ _ _ _ = return (True, return ())
+   applyInsertAction right left (path </> fp) >> return (False, ())
+simpleRightJoin _ _ _ _ = return (True, ())
 
 -- |Inner join. Performs all copying/deletions immediately.
-simpleInnerJoin :: JoinStrategy (IO ())
+simpleInnerJoin :: JoinStrategy ()
 simpleInnerJoin left _ path (Tr.Node (LeftOnly, fp) _) =
-   return (False, applyDeleteAction left $ path </> fp)
+   applyDeleteAction left (path </> fp) >> return (False, ())
 simpleInnerJoin _ right path (Tr.Node (RightOnly, fp) _) =
-   return (False, applyDeleteAction right $ path </> fp)
-simpleInnerJoin _ _ _ _ = return (True, return ())
+   applyDeleteAction right (path </> fp) >> return (False, ())
+simpleInnerJoin _ _ _ _ = return (True, ())
 
 -- |Full outer join. Performs all copying/deletions immediately.
-simpleOuterJoin :: JoinStrategy (IO ())
+simpleOuterJoin :: JoinStrategy ()
 simpleOuterJoin left right path (Tr.Node (LeftOnly, fp) _) =
-   return (False, applyInsertAction left right $ path </> fp)
+   applyInsertAction left right (path </> fp) >> return (False, ())
 simpleOuterJoin left right path (Tr.Node (RightOnly, fp) _) =
-   return (False, applyInsertAction right left $ path </> fp)
-simpleOuterJoin _ _ _ _ = return (True, return ())
+   applyInsertAction right left (path </> fp) >> return (False, ())
+simpleOuterJoin _ _ _ _ = return (True, ())
 
 -- Summary joins
 -------------------------------------------------------------------------------

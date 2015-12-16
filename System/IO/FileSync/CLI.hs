@@ -13,6 +13,8 @@ import qualified Data.Map as M
 import Data.Monoid
 import qualified Data.Sequence as S
 import qualified Data.Text as T
+import System.FilePath
+import System.IO.FileSync.Join
 import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
@@ -41,7 +43,13 @@ maim = evalStateT repl []
          (dirAsker "Enter source directory: ")
          (dirAsker "Enter target directory: ")
          joinStrategyAsker
-         (\_ src trg strat -> undefined)
+         (\_ src' trg' (_,strat) -> do
+             exclusions <- get
+             let filtF = flip elem exclusions . normalise . snd
+                 src = LR src'
+                 trg = RR trg'
+             diff <- filterForest filtF <$> liftIO (createDiffTree src trg)
+             liftIO $ syncForests strat src trg diff)
 
       cmdList :: Cmd
       cmdList = makeCommand
@@ -57,7 +65,7 @@ maim = evalStateT repl []
          "Sets a list of excluded directories (file format: one filepath per line)."
          False
          (existentFileAsker "Enter exlusions file: ")
-         (\_ fp -> liftIO (readFile fp) >$> lines >>= put)
+         (\_ fp -> liftIO (readFile fp) >$> (map normalise . lines) >>= put)
 
       cmdHelp :: Cmd
       cmdHelp = makeCommand
@@ -102,7 +110,7 @@ maim = evalStateT repl []
          where
             errMsg = (<> " could not be read.") . T.pack
 
-      joinStrategyAsker :: MonadIO m => Asker m T.Text (T.Text, JoinStrategy (IO ()))
+      joinStrategyAsker :: MonadIO m => Asker m T.Text (T.Text, JoinStrategy ())
       joinStrategyAsker = undefined
 
       unknownCommandHandler :: SomeCommandError -> StateT AppState IO ()
@@ -111,7 +119,7 @@ maim = evalStateT repl []
       otherIOErrorHandler :: IOException -> StateT AppState IO ()
       otherIOErrorHandler _ = liftIO $ putStrLn ("IO exception!" :: String)
 
-joinStrategies :: M.Map T.Text (JoinStrategy (IO ()))
+joinStrategies :: M.Map T.Text (JoinStrategy ())
 joinStrategies = M.fromList
    [("simpleLeft", simpleLeftJoin),
     ("simpleRight", simpleRightJoin),
@@ -124,8 +132,8 @@ joinStrategies = M.fromList
     ("summaryOuter", runSummaryJoin summaryOuterJoin)
    ]
 
-runSummaryJoin :: JoinStrategy (S.Seq FileAction) -> JoinStrategy (IO ())
+runSummaryJoin :: JoinStrategy (S.Seq FileAction) -> JoinStrategy ()
 runSummaryJoin j lr rr fp t = do
    (b,s) <- j lr rr fp t
    performSummaryJoin lr rr s
-   return (b, return ())
+   return (b, ())

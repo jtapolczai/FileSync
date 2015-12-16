@@ -3,8 +3,8 @@
 
 module System.IO.FileSync.Sync where
 
-import Control.Monad
 import Data.List
+import Data.Functor.Monadic
 import qualified Data.Tree as T
 import System.Directory
 import System.FilePath
@@ -55,6 +55,16 @@ syncTrees strategy src trg = go ""
          if continue then mappend res <$> mconcat <$> mapM (go $ path </> x) xs
                      else return res
 
+-- |See 'syncTrees'. Works with forests.
+syncForests
+   :: (Monoid b)
+   => JoinStrategy b
+   -> LeftRoot
+   -> RightRoot
+   -> T.Forest (TreeDiff, FilePath)
+   -> IO b
+syncForests strategy src trg = mapM (syncTrees strategy src trg) >=$> mconcat
+
 -- |Takes two directories and synchronizes them using a given join
 --  strategy. Everything said about 'syncTrees' applies.
 syncDirectories
@@ -63,6 +73,6 @@ syncDirectories
    -> LeftRoot
    -> RightRoot
    -> IO b
-syncDirectories strategy src trg = createDiffTree src trg >>= sync'
-   where
-      sync' = mapM (syncTrees strategy src trg) >=> return . mconcat
+syncDirectories strategy src trg =
+   createDiffTree src trg
+   >>= syncForests strategy src trg

@@ -111,7 +111,11 @@ maim = evalStateT repl []
             errMsg = (<> " could not be read.") . T.pack
 
       joinStrategyAsker :: MonadIO m => Asker m T.Text (T.Text, JoinStrategy ())
-      joinStrategyAsker = undefined
+      joinStrategyAsker = predAsker
+         "Enter join strategy name: "
+         (\t -> return $ case M.lookup (T.strip t) joinStrategies of
+                            Nothing -> Left $ genericPredicateError "No strategy by that name."
+                            Just s -> Right (t,s))
 
       unknownCommandHandler :: SomeCommandError -> StateT AppState IO ()
       unknownCommandHandler _ = liftIO $ putStrLn ("Malformed command.":: String)

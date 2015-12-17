@@ -17,7 +17,7 @@ genericJoin
    => T.Forest a -- ^The left forest S.
    -> T.Forest a -- ^The right forest T.
    -> T.Forest (TreeDiff, a)
-genericJoin ts ss =
+genericJoin ss ts =
    map (terminate LeftOnly) leftOnly
    ++ map (terminate RightOnly) rightOnly
    ++ map continue both
@@ -38,7 +38,7 @@ genericJoin ts ss =
       pairChildren (T.Node x xs) (T.Node _ ys) = (x,xs,ys)
 
       continue (x,xs,ys) = T.Node (Both, x) $ genericJoin xs ys
-      terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (Both,)) xs
+      terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (tag,)) xs
 
 -- |Filters out all sub-trees whose roots fail a predicate.
 filterForest :: (a -> Bool) -> T.Forest a -> T.Forest a

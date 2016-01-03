@@ -1,6 +1,9 @@
 module System.IO.FileSync.Tests where
 
 import Control.Exception
+import Control.Monad
+import qualified Data.Map as M
+import qualified Data.Set as S
 import qualified Data.Tree as Tr
 import System.Directory
 import System.IO
@@ -10,6 +13,7 @@ import Test.Hspec.Contrib.HUnit
 import Test.HUnit
 
 import System.IO.FileSync.Join
+import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 
@@ -30,7 +34,8 @@ tests = TestList
     TestLabel "sortTree7" $ TestCase sortTree7,
     TestLabel "filterTree1" $ TestCase filterTree1,
     TestLabel "filterTree2" $ TestCase filterTree2,
-    TestLabel "filterTree3" $ TestCase filterTree3]
+    TestLabel "filterTree3" $ TestCase filterTree3,
+    TestLabel "simpleJoin1" $ TestCase simpleJoin1]
 
 -- Create file tree
 -------------------------------------------------------------------------------
@@ -123,7 +128,13 @@ simpleJoin1 :: Assertion
 simpleJoin1 = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do undefined)
+   (do syncDirectories simpleLeftJoin (LR "testDir/dir1") (RR "testDir/dir2")
+       let dt' = map (fmap snd) $ filterForest (flip elem [LeftOnly, Both] . fst) dt1
+       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
+       assertBool "join performed" dirsMatch
+       ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
+       ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
+       assertBool "directories match after join" $ ft1 == ft2)
 
 -- Test data
 -------------------------------------------------------------------------------
@@ -231,5 +242,30 @@ rmD = removeDirectoryRecursive
 -- |Shorthand for a bracket that ignores the set-up's return value.
 bracket' :: IO a -> IO b -> IO c -> IO c
 bracket' start end op = bracket start (const end) (const op)
+
+-- |Returns True iff the children of a given path match the elements of a forest.
+--  For files, the given forest has to be empty.
+directoryStructureMatches :: FilePath -> Tr.Forest FilePath -> IO Bool
+directoryStructureMatches fp xs = do
+   isFile <- doesFileExist fp
+   isDir <- doesDirectoryExist fp
+   if isFile then return $ null xs
+   else if not isDir then return False
+   else do
+      contents <- filter (not . flip elem [".",".."]) <$> getDirectoryContents fp
+      dirs <- filterM doesDirectoryExist contents
+      files <- S.fromList <$> filterM doesFileExist contents
+
+      let leaves = S.fromList . map Tr.rootLabel . filter (null . Tr.subForest) $ xs
+          xsMap = M.fromList . map (\(Tr.Node y ys) -> (y,ys)) $ xs
+
+          leavesMatch = files `S.isSubsetOf` leaves
+
+          dirCall :: FilePath -> IO Bool
+          dirCall d = maybe (return False) (directoryStructureMatches $ fp </> d) (M.lookup d xsMap)
+
+      dirsMatch <- and <$> mapM dirCall dirs
+
+      return $ leavesMatch && dirsMatch
 
 -------------------------------------------------------------------------------

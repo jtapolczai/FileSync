@@ -36,58 +36,43 @@ tests = TestList
 -------------------------------------------------------------------------------
 
 createEmptyFileTree :: Assertion
-createEmptyFileTree =
-   bracket' (mkD "testDir/empty")
-            (rmD "testDir")
-            (do t <- createFileTree (LR "testDir/empty")
-                assertEqual "empty file tree" [] t)
+createEmptyFileTree = bracket'
+   (mkD "testDir/empty")
+   (rmD "testDir")
+   (do t <- createFileTree (LR "testDir/empty")
+       assertEqual "empty file tree" [] t)
 
 createFileTree1 :: Assertion
-createFileTree1 =
-   bracket' testDirsL
-            (rmD "testDir")
-            (do t <- createFileTree (LR "testDir/dir1")
-                putStrLn "Expected forest:"
-                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1 
-                putStrLn "Actual forest:"
-                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
-                assertEqual "file tree 1" (sortForest ft1) (sortForest t))
+createFileTree1 = bracket'
+   testDirsL
+   (rmD "testDir")
+   (do t <- createFileTree (LR "testDir/dir1")
+       putStrLn "Expected forest:"
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1 
+       putStrLn "Actual forest:"
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
+       assertEqual "file tree 1" (sortForest ft1) (sortForest t))
 
 -- Create diff tree
 -------------------------------------------------------------------------------
 
 createEmptyDiffTree :: Assertion
-createEmptyDiffTree =
-   bracket' (mkD "testDir/empty")
-            (rmD "testDir")
-            (do t <- createDiffTree (LR "testDir/empty") (RR "testDir/empty")
-                assertEqual "empty file tree" [] t)
+createEmptyDiffTree = bracket'
+   (mkD "testDir/empty")
+   (rmD "testDir")
+   (do t <- createDiffTree (LR "testDir/empty") (RR "testDir/empty")
+       assertEqual "empty file tree" [] t)
 
 createDiffTree1 :: Assertion
-createDiffTree1 =
-   bracket' (do testDirsL
-                testDirsR)
-            (rmD "testDir")
-            (do t <- createDiffTree (LR "testDir/dir1") (RR "testDir/dir2")
-                putStrLn "Expected forest:"
-                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
-                putStrLn "Actual forest:"
-                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
-                assertEqual "diff tree 1" (sortForest dt1) (sortForest t))
-
--- Filter
--------------------------------------------------------------------------------
-
-filterTree1 :: Assertion
-filterTree1 = assertEqual "empty forest" (filterForest (>1) []) []
-
-filterTree2 :: Assertion
-filterTree2 = assertEqual "all keys >3 filtered out" (filterForest (<=3) [tr1]) [tr1']
-   where
-      tr1' = Tr.Node 1 [l 3, l 1]
-
-filterTree3 :: Assertion
-filterTree3 = assertEqual "all keys >10 filtered out" (filterForest (<=10) [tr1]) [tr1]
+createDiffTree1 = bracket'
+   (testDirsL >> testDirsR)
+   (rmD "testDir")
+   (do t <- createDiffTree (LR "testDir/dir1") (RR "testDir/dir2")
+       putStrLn "Expected forest:"
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
+       putStrLn "Actual forest:"
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
+       assertEqual "diff tree 1" (sortForest dt1) (sortForest t))
 
 -- Sort forest
 -------------------------------------------------------------------------------
@@ -116,6 +101,29 @@ sortTree6 = assertEqual "equal forests mod. sorting" (sortForest [tr1, tr2]) (so
 
 sortTree7 :: Assertion
 sortTree7 = assertBool "different trees (even mod. sorting)" $ sortForest [tr1] /= sortForest [tr3] 
+
+-- Filter
+-------------------------------------------------------------------------------
+
+filterTree1 :: Assertion
+filterTree1 = assertEqual "empty forest" (filterForest (>1) []) []
+
+filterTree2 :: Assertion
+filterTree2 = assertEqual "all keys >3 filtered out" (filterForest (<=3) [tr1]) [tr1']
+   where
+      tr1' = Tr.Node 1 [l 3, l 1]
+
+filterTree3 :: Assertion
+filterTree3 = assertEqual "all keys >10 filtered out" (filterForest (<=10) [tr1]) [tr1]
+
+-- Simple join
+-------------------------------------------------------------------------------
+
+simpleJoin1 :: Assertion
+simpleJoin1 = bracket'
+   (testDirsL >> testDirsR)
+   (rmD "testDir")
+   (do undefined)
 
 -- Test data
 -------------------------------------------------------------------------------

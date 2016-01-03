@@ -9,6 +9,7 @@ import Test.Hspec
 import Test.Hspec.Contrib.HUnit
 import Test.HUnit
 
+import System.IO.FileSync.Join
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 
@@ -26,7 +27,10 @@ tests = TestList
     TestLabel "sortTree4" $ TestCase sortTree4,
     TestLabel "sortTree5" $ TestCase sortTree5,
     TestLabel "sortTree6" $ TestCase sortTree6,
-    TestLabel "sortTree7" $ TestCase sortTree7]
+    TestLabel "sortTree7" $ TestCase sortTree7,
+    TestLabel "filterTree1" $ TestCase filterTree1,
+    TestLabel "filterTree2" $ TestCase filterTree2,
+    TestLabel "filterTree3" $ TestCase filterTree3]
 
 -- Create file tree
 -------------------------------------------------------------------------------
@@ -73,6 +77,17 @@ createDiffTree1 =
 
 -- Filter
 -------------------------------------------------------------------------------
+
+filterTree1 :: Assertion
+filterTree1 = assertEqual "empty forest" (filterForest (>1) []) []
+
+filterTree2 :: Assertion
+filterTree2 = assertEqual "all keys >3 filtered out" (filterForest (<=3) [tr1]) [tr1']
+   where
+      tr1' = Tr.Node 1 [l 3, l 1]
+
+filterTree3 :: Assertion
+filterTree3 = assertEqual "all keys >10 filtered out" (filterForest (<=10) [tr1]) [tr1]
 
 -- Sort forest
 -------------------------------------------------------------------------------

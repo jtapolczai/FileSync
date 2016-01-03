@@ -4,6 +4,7 @@
 module System.IO.FileSync.Sync where
 
 import Data.List
+import Data.Ord
 import Data.Functor.Monadic
 import qualified Data.Tree as T
 import System.Directory
@@ -76,3 +77,9 @@ syncDirectories
 syncDirectories strategy src trg =
    createDiffTree src trg
    >>= syncForests strategy src trg
+
+-- |Recursively sorts a forest according to the keys.
+sortForest :: Ord a => T.Forest a -> T.Forest a
+sortForest = sortBy (comparing T.rootLabel) . map sortTree
+   where
+      sortTree (T.Node x xs) = T.Node x (sortForest xs)

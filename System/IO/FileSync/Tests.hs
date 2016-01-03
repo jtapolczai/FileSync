@@ -40,27 +40,14 @@ createEmptyFileTree =
 
 createFileTree1 :: Assertion
 createFileTree1 =
-   bracket' (do mkD "testDir/dir1"
-                mkD "testDir/dir1/both"
-                mkD "testDir/dir1/both/both1"
-                mkF "testDir/dir1/both/both1" "both2.txt" "both2_left"
-                mkD "testDir/dir1/both/both_onlyL"
-                mkF "testDir/dir1/both/both_onlyL" "both_onlyL.txt" "both_onlyL"
-                mkF "testDir/dir1/both/" "both.txt" "both"
-                mkD "testDir/dir1/onlyL"
-                mkD "testDir/dir1/onlyL/l1"
-                mkD "testDir/dir1/onlyL/l1/l3"
-                mkD "testDir/dir1/onlyL/l1/l3/l4"
-                mkF "testDir/dir1/onlyL/l1/l3/l4" "l2txt.txt" "l2"
-                mkF "testDir/dir1/onlyL/l1" "ltxt.txt" "ltxt"
-                mkD "testDir/dir1/onlyL/l2")
-           (rmD "testDir")
-           (do t <- createFileTree (LR "testDir/dir1")
-               putStrLn "Expected forest:"
-               putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1 
-               putStrLn "Actual forest:"
-               putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
-               assertEqual "file tree 1" (sortForest ft1) (sortForest t))
+   bracket' testDirsL
+            (rmD "testDir")
+            (do t <- createFileTree (LR "testDir/dir1")
+                putStrLn "Expected forest:"
+                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1 
+                putStrLn "Actual forest:"
+                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
+                assertEqual "file tree 1" (sortForest ft1) (sortForest t))
 
 -- Create diff tree
 -------------------------------------------------------------------------------
@@ -74,40 +61,18 @@ createEmptyDiffTree =
 
 createDiffTree1 :: Assertion
 createDiffTree1 =
-   bracket' (do mkD "testDir/dir1"
-                mkD "testDir/dir1/both"
-                mkD "testDir/dir1/both/both1"
-                mkF "testDir/dir1/both/both1" "both2.txt" "both2_left"
-                mkD "testDir/dir1/both/both_onlyL"
-                mkF "testDir/dir1/both/both_onlyL" "both_onlyL.txt" "both_onlyL"
-                mkF "testDir/dir1/both/" "both.txt" "both"
-                mkD "testDir/dir1/onlyL"
-                mkD "testDir/dir1/onlyL/l1"
-                mkD "testDir/dir1/onlyL/l1/l3"
-                mkD "testDir/dir1/onlyL/l1/l3/l4"
-                mkF "testDir/dir1/onlyL/l1/l3/l4" "l2txt.txt" "l2"
-                mkF "testDir/dir1/onlyL/l1" "ltxt.txt" "ltxt"
-                mkD "testDir/dir1/onlyL/l2"
+   bracket' (do testDirsL
+                testDirsR)
+            (rmD "testDir")
+            (do t <- createDiffTree (LR "testDir/dir1") (RR "testDir/dir2")
+                putStrLn "Expected forest:"
+                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
+                putStrLn "Actual forest:"
+                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
+                assertEqual "diff tree 1" (sortForest dt1) (sortForest t))
 
-                mkD "testDir/dir2"
-                mkD "testDir/dir2/both"
-                mkD "testDir/dir2/both/both1"
-                mkF "testDir/dir2/both/both1" "both2.txt" "both2_right"
-                mkD "testDir/dir2/both/both_onlyR"
-                mkF "testDir/dir2/both/both_onlyR" "both_onlyR.txt" "both_onlyR"
-                mkF "testDir/dir2/both/" "both.txt" "both"
-                mkD "testDir/dir2/onlyR"
-                mkD "testDir/dir2/onlyR/r1"
-                mkD "testDir/dir2/onlyR/r2"
-                mkD "testDir/dir2/onlyR/r2/r3"
-                mkF "testDir/dir2/onlyR/r2/r3" "rtxt.txt" "rtxt")
-           (rmD "testDir")
-           (do t <- createDiffTree (LR "testDir/dir1") (RR "testDir/dir2")
-               putStrLn "Expected forest:"
-               putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
-               putStrLn "Actual forest:"
-               putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
-               assertEqual "diff tree 1" (sortForest dt1) (sortForest t))
+-- Filter
+-------------------------------------------------------------------------------
 
 -- Sort forest
 -------------------------------------------------------------------------------
@@ -139,6 +104,38 @@ sortTree7 = assertBool "different trees (even mod. sorting)" $ sortForest [tr1] 
 
 -- Test data
 -------------------------------------------------------------------------------
+
+testDirsL :: IO ()
+testDirsL = do
+   mkD "testDir/dir1"
+   mkD "testDir/dir1/both"
+   mkD "testDir/dir1/both/both1"
+   mkF "testDir/dir1/both/both1" "both2.txt" "both2_left"
+   mkD "testDir/dir1/both/both_onlyL"
+   mkF "testDir/dir1/both/both_onlyL" "both_onlyL.txt" "both_onlyL"
+   mkF "testDir/dir1/both/" "both.txt" "both"
+   mkD "testDir/dir1/onlyL"
+   mkD "testDir/dir1/onlyL/l1"
+   mkD "testDir/dir1/onlyL/l1/l3"
+   mkD "testDir/dir1/onlyL/l1/l3/l4"
+   mkF "testDir/dir1/onlyL/l1/l3/l4" "l2txt.txt" "l2"
+   mkF "testDir/dir1/onlyL/l1" "ltxt.txt" "ltxt"
+   mkD "testDir/dir1/onlyL/l2"
+
+testDirsR :: IO ()
+testDirsR = do
+   mkD "testDir/dir2"
+   mkD "testDir/dir2/both"
+   mkD "testDir/dir2/both/both1"
+   mkF "testDir/dir2/both/both1" "both2.txt" "both2_right"
+   mkD "testDir/dir2/both/both_onlyR"
+   mkF "testDir/dir2/both/both_onlyR" "both_onlyR.txt" "both_onlyR"
+   mkF "testDir/dir2/both/" "both.txt" "both"
+   mkD "testDir/dir2/onlyR"
+   mkD "testDir/dir2/onlyR/r1"
+   mkD "testDir/dir2/onlyR/r2"
+   mkD "testDir/dir2/onlyR/r2/r3"
+   mkF "testDir/dir2/onlyR/r2/r3" "rtxt.txt" "rtxt"
 
 ft1 :: Tr.Forest FilePath
 ft1 = [Tr.Node ("both")

@@ -17,7 +17,14 @@ runTests = hspec . fromHUnitTest $ tests
 
 tests = TestList
    [TestLabel "createEmptyFileTree" $ TestCase createEmptyFileTree,
-    TestLabel "createFileTree1" $ TestCase createFileTree1]
+    TestLabel "createFileTree1" $ TestCase createFileTree1,
+    TestLabel "sortTree1" $ TestCase sortTree1,
+    TestLabel "sortTree2" $ TestCase sortTree2,
+    TestLabel "sortTree3" $ TestCase sortTree3,
+    TestLabel "sortTree4" $ TestCase sortTree4,
+    TestLabel "sortTree5" $ TestCase sortTree5,
+    TestLabel "sortTree6" $ TestCase sortTree6,
+    TestLabel "sortTree7" $ TestCase sortTree7]
 
 createEmptyFileTree :: Assertion
 createEmptyFileTree =
@@ -62,30 +69,72 @@ createFileTree1 =
                putStrLn "Actual forest:"
                putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
                assertEqual "file tree 1" (sortForest dt) (sortForest t))
+
+sortTree1 :: Assertion
+sortTree1 = assertEqual "empty forests" (sortForest fr) (sortForest fr)
    where
-      dt = [Tr.Node (Both, "both")
-              [Tr.Node (Both, "both1")
-                 [Tr.Node (Both, "both2.txt") []],
-               Tr.Node (LeftOnly, "both_onlyL")
-                  [Tr.Node (LeftOnly, "both_onlyL.txt") []],
-               Tr.Node (RightOnly, "both_onlyR")
-                  [Tr.Node (RightOnly, "both_onlyR.txt") []],
-               Tr.Node (Both, "both.txt") []],
-            Tr.Node (LeftOnly, "onlyL")
-               [Tr.Node (LeftOnly, "l1")
-                  [Tr.Node (LeftOnly, "l3")
-                     [Tr.Node (LeftOnly, "l4")
-                        [Tr.Node (LeftOnly, "l2txt.txt") []]],
-                   Tr.Node (LeftOnly, "ltxt.txt") []],
-                Tr.Node (LeftOnly, "l2") []],
-            Tr.Node (RightOnly, "onlyR")
-               [Tr.Node (RightOnly, "r1") [],
-                Tr.Node (RightOnly, "r2")
-                  [Tr.Node (RightOnly, "r3")
-                     [Tr.Node (RightOnly, "rtxt.txt") []]]]]
+      fr :: Tr.Forest Int
+      fr = []
+
+sortTree2 :: Assertion
+sortTree2 = assertBool "one empty and one non-empty forest"
+                       $ sortForest [Tr.Node 1 []] /= sortForest []
+
+sortTree3 :: Assertion
+sortTree3 = assertEqual "the same forest twice" (sortForest dt) (sortForest dt)
+
+sortTree4 :: Assertion
+sortTree4 = assertEqual "equal forests mod. sorting" (sortForest [tr1]) (sortForest [tr2])
+
+sortTree5 :: Assertion
+sortTree5 = assertEqual "idempotent sorting" (sortForest [tr1]) (sortForest $ sortForest [tr1])
+
+sortTree6 :: Assertion
+sortTree6 = assertEqual "equal forests mod. sorting" (sortForest [tr1, tr2]) (sortForest [tr2, tr1])
+
+sortTree7 :: Assertion
+sortTree7 = assertBool "different trees (even mod. sorting)" $ sortForest [tr1] /= sortForest [tr3] 
+
+-- Test data
+-------------------------------------------------------------------------------
+
+dt :: Tr.Forest (TreeDiff, FilePath)
+dt = [Tr.Node (Both, "both")
+        [Tr.Node (Both, "both1")
+           [Tr.Node (Both, "both2.txt") []],
+         Tr.Node (LeftOnly, "both_onlyL")
+            [Tr.Node (LeftOnly, "both_onlyL.txt") []],
+         Tr.Node (RightOnly, "both_onlyR")
+            [Tr.Node (RightOnly, "both_onlyR.txt") []],
+         Tr.Node (Both, "both.txt") []],
+      Tr.Node (LeftOnly, "onlyL")
+         [Tr.Node (LeftOnly, "l1")
+            [Tr.Node (LeftOnly, "l3")
+               [Tr.Node (LeftOnly, "l4")
+                  [Tr.Node (LeftOnly, "l2txt.txt") []]],
+             Tr.Node (LeftOnly, "ltxt.txt") []],
+          Tr.Node (LeftOnly, "l2") []],
+      Tr.Node (RightOnly, "onlyR")
+         [Tr.Node (RightOnly, "r1") [],
+          Tr.Node (RightOnly, "r2")
+            [Tr.Node (RightOnly, "r3")
+               [Tr.Node (RightOnly, "rtxt.txt") []]]]]
+
+tr1 :: Tr.Tree Int
+tr1 = Tr.Node 1 [l 4, l 3, l 1, l 8, Tr.Node 7 [l 1, l 9]]
+
+tr2 :: Tr.Tree Int
+tr2 = Tr.Node 1 [l 1, l 4, Tr.Node 7 [l 9, l 1], l 8, l 3]
+
+tr3 :: Tr.Tree Int
+tr3 = Tr.Node 1 [l 1, l 2, Tr.Node 5 [l 9, l 1], l 8, l 3]
 
 -- Helpers
 -------------------------------------------------------------------------------
+
+-- |Shorthand for creating a leaf.
+l :: a -> Tr.Tree a
+l = flip Tr.Node []
 
 -- |Shorthand for creating a directory (and its parents too) if it doesn't exist.
 mkD :: FilePath -> IO () 

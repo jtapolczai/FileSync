@@ -22,45 +22,55 @@ tests = TestList
 createEmptyFileTree :: Assertion
 createEmptyFileTree =
    bracket' (mkD "testDir/empty")
-            (rmD "testDir/empty")
+            (rmD "testDir")
             (do t <- createFileTree (LR "testDir/empty")
                 assertEqual "empty file tree" [] t)
 
 createFileTree1 :: Assertion
 createFileTree1 =
    bracket' (do mkD "testDir/dir1"
-                mkD "testDir/both"
-                mkD "testDir/both/both1"
-                mkF "testDir/both/both1" "both2.txt" "both2_left"
-                mkD "testDir/both/both_onlyL"
-                mkF "testDir/both/both_onlyL" "both_onlyL.txt" "both_onlyL"
-                mkF "testDir/both/" "both.txt" "both"
-                mkD "testDir/onlyL"
-                mkD "testDir/onlyL/l1"
-                mkD "testDir/onlyL/l1/l3"
-                mkD "testDir/onlyL/l1/l3/l4"
-                mkF "testDir/onlyL/l1/l3/l4" "l2txt.txt" "l2"
-                mkF "testDir/onlyL/l1" "ltxt.txt" "ltxt"
-                mkD "testDir/onlyL/l2"
+                mkD "testDir/dir1/both"
+                mkD "testDir/dir1/both/both1"
+                mkF "testDir/dir1/both/both1" "both2.txt" "both2_left"
+                mkD "testDir/dir1/both/both_onlyL"
+                mkF "testDir/dir1/both/both_onlyL" "both_onlyL.txt" "both_onlyL"
+                mkF "testDir/dir1/both/" "both.txt" "both"
+                mkD "testDir/dir1/onlyL"
+                mkD "testDir/dir1/onlyL/l1"
+                mkD "testDir/dir1/onlyL/l1/l3"
+                mkD "testDir/dir1/onlyL/l1/l3/l4"
+                mkF "testDir/dir1/onlyL/l1/l3/l4" "l2txt.txt" "l2"
+                mkF "testDir/dir1/onlyL/l1" "ltxt.txt" "ltxt"
+                mkD "testDir/dir1/onlyL/l2"
 
                 mkD "testDir/dir2"
-                mkD "testDir/both"
-                mkD "testDir/both/both1"
-                mkF "testDir/both/both1" "both2.txt" "both2_right"
-                mkD "testDir/both/both_onlyR"
-                mkF "testDir/both/both_onlyR" "both_onlyR.txt" "both_onlyR"
-                mkF "testDir/both/" "both.txt" "both"
-                mkD "testDir/onlyR"
-                mkD "testDir/onlyR/r1"
-                mkD "testDir/onlyR/r2"
-                mkD "testDir/onlyR/r2/r3"
-                mkF "testDir/onlyR/r2/r3" "rtxt.txt" "rtxt")
-           (do rmD "testDir/dir1"
-               rmD "testDir/dir2")
+                mkD "testDir/dir2/both"
+                mkD "testDir/dir2/both/both1"
+                mkF "testDir/dir2/both/both1" "both2.txt" "both2_right"
+                mkD "testDir/dir2/both/both_onlyR"
+                mkF "testDir/dir2/both/both_onlyR" "both_onlyR.txt" "both_onlyR"
+                mkF "testDir/dir2/both/" "both.txt" "both"
+                mkD "testDir/dir2/onlyR"
+                mkD "testDir/dir2/onlyR/r1"
+                mkD "testDir/dir2/onlyR/r2"
+                mkD "testDir/dir2/onlyR/r2/r3"
+                mkF "testDir/dir2/onlyR/r2/r3" "rtxt.txt" "rtxt")
+           (rmD "testDir")
            (do t <- createDiffTree (LR "testDir/dir1") (RR "testDir/dir2")
-               assertEqual "file tree 1" dt t)
+               putStrLn "Expected forest:"
+               putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt 
+               putStrLn "Actual forest:"
+               putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
+               assertEqual "file tree 1" (sortForest dt) (sortForest t))
    where
-      dt = [Tr.Node (Both, "both") [],
+      dt = [Tr.Node (Both, "both")
+              [Tr.Node (Both, "both1")
+                 [Tr.Node (Both, "both2.txt") []],
+               Tr.Node (LeftOnly, "both_onlyL")
+                  [Tr.Node (LeftOnly, "both_onlyL.txt") []],
+               Tr.Node (RightOnly, "both_onlyR")
+                  [Tr.Node (RightOnly, "both_onlyR.txt") []],
+               Tr.Node (Both, "both.txt") []],
             Tr.Node (LeftOnly, "onlyL")
                [Tr.Node (LeftOnly, "l1")
                   [Tr.Node (LeftOnly, "l3")
@@ -73,9 +83,6 @@ createFileTree1 =
                 Tr.Node (RightOnly, "r2")
                   [Tr.Node (RightOnly, "r3")
                      [Tr.Node (RightOnly, "rtxt.txt") []]]]]
-
-
-
 
 -- Helpers
 -------------------------------------------------------------------------------

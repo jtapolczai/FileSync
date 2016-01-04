@@ -63,7 +63,7 @@ createFileTree1 :: Assertion
 createFileTree1 = bracket'
    testDirsL
    (rmD "testDir")
-   (do t <- createFileTree (LR "testDir/dir1")
+   (do t <- createFileTree lr
        putStrLn "Expected forest:"
        putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1 
        putStrLn "Actual forest:"
@@ -84,7 +84,7 @@ createDiffTree1 :: Assertion
 createDiffTree1 = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do t <- createDiffTree (LR "testDir/dir1") (RR "testDir/dir2")
+   (do t <- createDiffTree lr rr
        putStrLn "Expected forest:"
        putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
        putStrLn "Actual forest:"
@@ -142,12 +142,12 @@ simpleJoin_template :: (TreeDiff -> Bool)
 simpleJoin_template okElems strategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do syncDirectories strategy (LR "testDir/dir1") (RR "testDir/dir2")
+   (do syncDirectories strategy lr rr
        let dt' = map (fmap snd) $ filterForest (okElems . fst) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
-       ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
+       ft1 <- sortForest <$> createFileTree lr
+       ft2 <- sortForest <$> createFileTree rr
        assertBool "directories match after join" $ ft1 == ft2)
 
 simpleJoinL1 :: Assertion
@@ -170,11 +170,11 @@ summaryJoin_noChange_template :: (JoinStrategy (S.Seq FileAction))
 summaryJoin_noChange_template joinStrategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do ftInitL <- sortForest <$> createFileTree (LR "testDir/dir1")
-       ftInitR <- sortForest <$> createFileTree (LR "testDir/dir2")
-       syncDirectories joinStrategy (LR "testDir/dir1") (RR "testDir/dir2")
-       ftOutL <- sortForest <$> createFileTree (LR "testDir/dir1")
-       ftOutR <- sortForest <$> createFileTree (LR "testDir/dir2")
+   (do ftInitL <- sortForest <$> createFileTree lr
+       ftInitR <- sortForest <$> createFileTree rr
+       syncDirectories joinStrategy lr rr
+       ftOutL <- sortForest <$> createFileTree lr
+       ftOutR <- sortForest <$> createFileTree rr
        assertBool "left directory didn't change without join" $ ftInitL == ftOutL
        assertBool "right directory didn't change without join" $ ftInitR == ftOutR)
 
@@ -196,13 +196,13 @@ summaryJoin_template :: (TreeDiff -> Bool)
 summaryJoin_template okElems strategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do actions <- syncDirectories strategy (LR "testDir/dir1") (RR "testDir/dir2")
-       mapM (performFileAction (LR "testDir/dir1") (RR "testDir/dir2")) actions
+   (do actions <- syncDirectories strategy lr rr
+       mapM (performFileAction lr rr) actions
        let dt' = map (fmap snd) $ filterForest (okElems . fst) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
-       ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
+       ft1 <- sortForest <$> createFileTree lr
+       ft2 <- sortForest <$> createFileTree rr
        assertBool "directories match after join" $ ft1 == ft2)
 
 summaryJoinL1 :: Assertion

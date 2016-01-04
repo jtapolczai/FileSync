@@ -1,4 +1,4 @@
-module System.IO.FileSync.Tests where
+module Main where
 
 import Control.Exception
 import Control.Monad
@@ -18,8 +18,8 @@ import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 
-runTests :: IO ()
-runTests = hspec . fromHUnitTest $ tests
+main :: IO ()
+main = hspec . fromHUnitTest $ tests
 
 tests = TestList
    [TestLabel "createEmptyFileTree" $ TestCase createEmptyFileTree,

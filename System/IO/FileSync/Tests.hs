@@ -3,7 +3,8 @@ module System.IO.FileSync.Tests where
 import Control.Exception
 import Control.Monad
 import qualified Data.Map as M
-import qualified Data.Set as S
+import qualified Data.Sequence as S
+import qualified Data.Set as St
 import qualified Data.Tree as Tr
 import System.Directory
 import System.IO
@@ -38,7 +39,15 @@ tests = TestList
     TestLabel "simpleJoinL1" $ TestCase simpleJoinL1,
     TestLabel "simpleJoinR1" $ TestCase simpleJoinR1,
     TestLabel "simpleJoinO1" $ TestCase simpleJoinO1,
-    TestLabel "simpleJoinI1" $ TestCase simpleJoinI1]
+    TestLabel "simpleJoinI1" $ TestCase simpleJoinI1,
+    TestLabel "summaryJoinL_noChange" $ TestCase summaryJoinL_noChange,
+    TestLabel "summaryJoinR_noChange" $ TestCase summaryJoinR_noChange,
+    TestLabel "summaryJoinO_noChange" $ TestCase summaryJoinO_noChange,
+    TestLabel "summaryJoinI_noChange" $ TestCase summaryJoinI_noChange,
+    TestLabel "summaryJoinL1" $ TestCase summaryJoinL1,
+    TestLabel "summaryJoinR1" $ TestCase summaryJoinR1,
+    TestLabel "summaryJoinO1" $ TestCase summaryJoinO1,
+    TestLabel "summaryJoinI1" $ TestCase summaryJoinI1]
 
 -- Create file tree
 -------------------------------------------------------------------------------
@@ -127,53 +136,86 @@ filterTree3 = assertEqual "all keys >10 filtered out" (filterForest (<=10) [tr1]
 -- Simple join
 -------------------------------------------------------------------------------
 
-simpleJoinL1 :: Assertion
-simpleJoinL1 = bracket'
+simpleJoin_template :: (TreeDiff -> Bool)
+                    -> JoinStrategy ()
+                    -> Assertion
+simpleJoin_template okElems strategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do syncDirectories simpleLeftJoin (LR "testDir/dir1") (RR "testDir/dir2")
-       let dt' = map (fmap snd) $ filterForest (flip elem [LeftOnly, Both] . fst) dt1
+   (do syncDirectories strategy (LR "testDir/dir1") (RR "testDir/dir2")
+       let dt' = map (fmap snd) $ filterForest (okElems . fst) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
        ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
        ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
        assertBool "directories match after join" $ ft1 == ft2)
+
+simpleJoinL1 :: Assertion
+simpleJoinL1 = simpleJoin_template (flip elem [LeftOnly, Both]) simpleLeftJoin
 
 simpleJoinR1 :: Assertion
-simpleJoinR1 = bracket'
-   (testDirsL >> testDirsR)
-   (rmD "testDir")
-   (do syncDirectories simpleRightJoin (LR "testDir/dir1") (RR "testDir/dir2")
-       let dt' = map (fmap snd) $ filterForest (flip elem [RightOnly, Both] . fst) dt1
-       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
-       assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
-       ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
-       assertBool "directories match after join" $ ft1 == ft2)
+simpleJoinR1 = simpleJoin_template (flip elem [Both, RightOnly]) simpleRightJoin
 
 simpleJoinO1 :: Assertion
-simpleJoinO1 = bracket'
+simpleJoinO1 = simpleJoin_template (flip elem [LeftOnly, Both, RightOnly]) simpleOuterJoin
+
+simpleJoinI1 :: Assertion
+simpleJoinI1 = simpleJoin_template (flip elem [Both]) simpleInnerJoin
+
+-- Summary join
+-------------------------------------------------------------------------------
+
+summaryJoin_noChange_template :: (JoinStrategy (S.Seq FileAction))
+                      -> Assertion
+summaryJoin_noChange_template joinStrategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do syncDirectories simpleOuterJoin (LR "testDir/dir1") (RR "testDir/dir2")
-       let dt' = map (fmap snd) dt1
+   (do ftInitL <- sortForest <$> createFileTree (LR "testDir/dir1")
+       ftInitR <- sortForest <$> createFileTree (LR "testDir/dir2")
+       syncDirectories joinStrategy (LR "testDir/dir1") (RR "testDir/dir2")
+       ftOutL <- sortForest <$> createFileTree (LR "testDir/dir1")
+       ftOutR <- sortForest <$> createFileTree (LR "testDir/dir2")
+       assertBool "left directory didn't change without join" $ ftInitL == ftOutL
+       assertBool "right directory didn't change without join" $ ftInitR == ftOutR)
+
+summaryJoinL_noChange :: Assertion
+summaryJoinL_noChange = summaryJoin_noChange_template summaryLeftJoin
+
+summaryJoinR_noChange :: Assertion
+summaryJoinR_noChange = summaryJoin_noChange_template summaryRightJoin
+
+summaryJoinO_noChange :: Assertion
+summaryJoinO_noChange = summaryJoin_noChange_template summaryOuterJoin
+
+summaryJoinI_noChange :: Assertion
+summaryJoinI_noChange = summaryJoin_noChange_template summaryInnerJoin
+
+summaryJoin_template :: (TreeDiff -> Bool)
+                     -> (JoinStrategy (S.Seq FileAction))
+                     -> Assertion
+summaryJoin_template okElems strategy = bracket'
+   (testDirsL >> testDirsR)
+   (rmD "testDir")
+   (do actions <- syncDirectories strategy (LR "testDir/dir1") (RR "testDir/dir2")
+       mapM (performFileAction (LR "testDir/dir1") (RR "testDir/dir2")) actions
+       let dt' = map (fmap snd) $ filterForest (okElems . fst) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
        ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
        ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
        assertBool "directories match after join" $ ft1 == ft2)
 
-simpleJoinI1 :: Assertion
-simpleJoinI1 = bracket'
-   (testDirsL >> testDirsR)
-   (rmD "testDir")
-   (do syncDirectories simpleInnerJoin (LR "testDir/dir1") (RR "testDir/dir2")
-       let dt' = map (fmap snd) $ filterForest (flip elem [Both] . fst) dt1
-       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
-       assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
-       ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
-       assertBool "directories match after join" $ ft1 == ft2)
+summaryJoinL1 :: Assertion
+summaryJoinL1 = summaryJoin_template (flip elem [LeftOnly, Both]) summaryLeftJoin
+
+summaryJoinR1 :: Assertion
+summaryJoinR1 = summaryJoin_template (flip elem [Both, RightOnly]) summaryRightJoin
+
+summaryJoinO1 :: Assertion
+summaryJoinO1 = summaryJoin_template (flip elem [LeftOnly, Both, RightOnly]) summaryOuterJoin
+
+summaryJoinI1 :: Assertion
+summaryJoinI1 = summaryJoin_template (flip elem [Both]) summaryInnerJoin
 
 -- Test data
 -------------------------------------------------------------------------------
@@ -256,6 +298,12 @@ tr2 = Tr.Node 1 [l 1, l 4, Tr.Node 7 [l 9, l 1], l 8, l 3]
 tr3 :: Tr.Tree Int
 tr3 = Tr.Node 1 [l 1, l 2, Tr.Node 5 [l 9, l 1], l 8, l 3]
 
+lr :: LeftRoot
+lr = LR "testDir/dir1"
+
+rr :: RightRoot
+rr = RR "testDir/dir2"
+
 -- Helpers
 -------------------------------------------------------------------------------
 
@@ -293,12 +341,12 @@ directoryStructureMatches fp xs = do
    else do
       contents <- filter (not . flip elem [".",".."]) <$> getDirectoryContents fp
       dirs <- filterM doesDirectoryExist contents
-      files <- S.fromList <$> filterM doesFileExist contents
+      files <- St.fromList <$> filterM doesFileExist contents
 
-      let leaves = S.fromList . map Tr.rootLabel . filter (null . Tr.subForest) $ xs
+      let leaves = St.fromList . map Tr.rootLabel . filter (null . Tr.subForest) $ xs
           xsMap = M.fromList . map (\(Tr.Node y ys) -> (y,ys)) $ xs
 
-          leavesMatch = files `S.isSubsetOf` leaves
+          leavesMatch = files `St.isSubsetOf` leaves
 
           dirCall :: FilePath -> IO Bool
           dirCall d = maybe (return False) (directoryStructureMatches $ fp </> d) (M.lookup d xsMap)

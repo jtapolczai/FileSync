@@ -1,5 +1,3 @@
-***STATUS: not feature-complete.***
-
 # FileSync
 An utility for synchronizing directories.
 
@@ -20,5 +18,6 @@ Usage
   ```haskell
      System.IO.FileSync.Sync
   ```
-* As a standalone executable: `cabal build filesync-cli`.
+* [***STATUS: not feature-complete.***]
+  As a standalone executable: `cabal build filesync-cli`.
   The main module is `System.IO.FileSync.CLI`.

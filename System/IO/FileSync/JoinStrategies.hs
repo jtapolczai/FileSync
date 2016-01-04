@@ -25,6 +25,7 @@ import Control.Exception
 import qualified Data.Sequence as S
 import qualified Data.Text as T
 import qualified Data.Tree as Tr
+import GHC.IO.Exception (IOErrorType(InappropriateType))
 import System.Directory (getDirectoryContents)
 import System.FilePath
 import System.IO.Error
@@ -33,9 +34,9 @@ import System.REPL
 import System.IO.FileSync.Types
 
 -- |Uncomment this line to mock writing IO functions.
-import System.IO.Mock
+-- import System.IO.Mock
 -- |Uncomment this line to use real writing IO functions.
--- import System.Directory
+import System.Directory
 
 -- Simple joins
 -------------------------------------------------------------------------------
@@ -161,10 +162,10 @@ applyDeleteAction
    => src -- |Root S of the source.
    -> FilePath -- ^Path P in the tree, starting from the root.
    -> IO ()
-applyDeleteAction src path =
+applyDeleteAction src path = 
    catchJust noDirFoundException
-            (removeDirectoryRecursive sPath)
-            (const $ removeFile sPath)
+             (removeDirectoryRecursive sPath)
+             (const $ removeFile sPath)
    where
       sPath = getFilePath src </> path
 
@@ -189,29 +190,34 @@ applyInsertAction src trg path =
       tPath = getFilePath trg </> path
 
 -- |Copies a directory recursively. Tries to copy permissions.
---  Does not handle exceptions.
+--  Does not handle exceptions. The target directory will be created if it does not exist.
 copyDirectory :: FilePath -> FilePath -> IO ()
 copyDirectory src trg = go ""
    where
-      go path = getDirectoryContents (src </> path) >>= mapM_ (tryCopyRec path)
+      -- Tries to copy a directory. Fails (safely) if (sPath </> path) is not a directory.
+      go :: FilePath -> IO ()
+      go path = do
+         let sPath = src </> path
+             tPath = trg </> path
+         -- if this succeeds, we have an existent directory and try to copy it
+         contents <- filter (not . flip elem [".",".."]) <$> getDirectoryContents sPath
+         createDirectory tPath
+         copyPermissions sPath tPath
+         -- recursive call. Note: no distinction between files and subdirectories.
+         -- that's in copyRec.
+         mapM_ (copyRec . (path </>)) contents
 
-      tryCopyRec :: FilePath -> FilePath -> IO ()
-      tryCopyRec _ "." = return ()
-      tryCopyRec _ ".." = return ()
-      tryCopyRec path cur = let
-            sPath = src </> path </> cur
-            tPath = trg </> path </> cur
-         in
-            catchJust noDirFoundException
-                     (do createDirectory tPath
-                         copyPermissions sPath tPath
-                         go $ path </> cur)
-                     (\_ -> do copyFile sPath tPath
-                               copyPermissions sPath tPath)
+      copyRec :: FilePath -> IO ()
+      copyRec path = catchJust noDirFoundException
+                               (go path)
+                               (const $ copyFile (src </> path) (trg </> path))
 
 
 -- |Returns a Just iff the exception is of type "DoesNotExist"/"NoSuchThing".
 noDirFoundException :: IOError -> Maybe ()
-noDirFoundException e =
-   if isDoesNotExistErrorType (ioeGetErrorType e)
-   then Just () else Nothing
+noDirFoundException e = 
+   if isDoesNotExistErrorType et || isInappropriateTypeErrorType et then Just () else Nothing
+   where
+      et = ioeGetErrorType e
+      isInappropriateTypeErrorType InappropriateType = True
+      isInappropriateTypeErrorType _ = False 

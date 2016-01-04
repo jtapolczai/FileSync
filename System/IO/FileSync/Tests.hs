@@ -35,7 +35,10 @@ tests = TestList
     TestLabel "filterTree1" $ TestCase filterTree1,
     TestLabel "filterTree2" $ TestCase filterTree2,
     TestLabel "filterTree3" $ TestCase filterTree3,
-    TestLabel "simpleJoin1" $ TestCase simpleJoin1]
+    TestLabel "simpleJoinL1" $ TestCase simpleJoinL1,
+    TestLabel "simpleJoinR1" $ TestCase simpleJoinR1,
+    TestLabel "simpleJoinO1" $ TestCase simpleJoinO1,
+    TestLabel "simpleJoinI1" $ TestCase simpleJoinI1]
 
 -- Create file tree
 -------------------------------------------------------------------------------
@@ -124,12 +127,48 @@ filterTree3 = assertEqual "all keys >10 filtered out" (filterForest (<=10) [tr1]
 -- Simple join
 -------------------------------------------------------------------------------
 
-simpleJoin1 :: Assertion
-simpleJoin1 = bracket'
+simpleJoinL1 :: Assertion
+simpleJoinL1 = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
    (do syncDirectories simpleLeftJoin (LR "testDir/dir1") (RR "testDir/dir2")
        let dt' = map (fmap snd) $ filterForest (flip elem [LeftOnly, Both] . fst) dt1
+       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
+       assertBool "join performed" dirsMatch
+       ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
+       ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
+       assertBool "directories match after join" $ ft1 == ft2)
+
+simpleJoinR1 :: Assertion
+simpleJoinR1 = bracket'
+   (testDirsL >> testDirsR)
+   (rmD "testDir")
+   (do syncDirectories simpleRightJoin (LR "testDir/dir1") (RR "testDir/dir2")
+       let dt' = map (fmap snd) $ filterForest (flip elem [RightOnly, Both] . fst) dt1
+       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
+       assertBool "join performed" dirsMatch
+       ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
+       ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
+       assertBool "directories match after join" $ ft1 == ft2)
+
+simpleJoinO1 :: Assertion
+simpleJoinO1 = bracket'
+   (testDirsL >> testDirsR)
+   (rmD "testDir")
+   (do syncDirectories simpleOuterJoin (LR "testDir/dir1") (RR "testDir/dir2")
+       let dt' = map (fmap snd) dt1
+       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
+       assertBool "join performed" dirsMatch
+       ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")
+       ft2 <- sortForest <$> createFileTree (LR "testDir/dir2")
+       assertBool "directories match after join" $ ft1 == ft2)
+
+simpleJoinI1 :: Assertion
+simpleJoinI1 = bracket'
+   (testDirsL >> testDirsR)
+   (rmD "testDir")
+   (do syncDirectories simpleInnerJoin (LR "testDir/dir1") (RR "testDir/dir2")
+       let dt' = map (fmap snd) $ filterForest (flip elem [Both] . fst) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
        ft1 <- sortForest <$> createFileTree (LR "testDir/dir1")

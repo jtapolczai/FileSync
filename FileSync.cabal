@@ -8,8 +8,7 @@ description:         Have you ever had two huge directories with maybe 50 files 
 license:             Apache-2.0
 license-file:        LICENSE
 author:              Janos Tapolczai
-maintainer:          janos.tapolczai@gmail.com
--- copyright:           
+maintainer:          janos.tapolczai@gmail.com      
 category:            System
 build-type:          Simple
 extra-source-files:  README.md

@@ -22,6 +22,7 @@ module System.IO.FileSync.JoinStrategies (
    ) where
 
 import Control.Exception
+import Data.Maybe
 import qualified Data.Sequence as S
 import qualified Data.Text as T
 import qualified Data.Tree as Tr
@@ -78,31 +79,42 @@ simpleOuterJoin _ _ _ _ = return (True, ())
 
 -- |Generic summary join. Creates a list of actions to be performed,
 --  which can be run with 'performSummaryJoin'.
+--
+--  The Continue-part of the return value will be True iff the action handler
+--  returns Nothing.
 summaryJoin
-   :: (FilePath -> FileAction) -- ^Action for "left only" parts.
-   -> (FilePath -> FileAction) -- ^Action for "right only" parts.
+   :: (FilePath -> IO (Maybe FileAction)) -- ^Action for "left only" parts.
+   -> (FilePath -> IO (Maybe FileAction)) -- ^Action for "right only" parts.
+   -> (FilePath -> IO (Maybe FileAction)) -- ^Action for parts present in both trees.
    -> JoinStrategy (S.Seq FileAction)
-summaryJoin lA _ _ _ path (Tr.Node (LeftOnly, fp) _) =
-   return (False, S.singleton $ lA $ path </> fp)
-summaryJoin _ rA _ _ path (Tr.Node (RightOnly, fp) _) =
-   return (False, S.singleton $ rA $ path </> fp)
-summaryJoin _ _ _ _ _ _ = return (True, S.empty)
+summaryJoin lA rA bA _ _ path (Tr.Node (diff, fp) _) = do
+   let handler = case diff of {LeftOnly -> lA; RightOnly -> rA; Both -> bA}
+   act <- handler (path </> fp)
+   return (isNothing act, maybe S.empty S.singleton act)
 
 -- |Left join. See 'summaryJoin'.
 summaryLeftJoin :: JoinStrategy (S.Seq FileAction)
-summaryLeftJoin = summaryJoin (Copy LeftSide) (Delete RightSide)
+summaryLeftJoin = summaryJoin (return . Just . Copy LeftSide)
+                              (return . Just . Delete RightSide)
+                              (const $ return Nothing)
 
 -- |Right join. See 'summaryJoin'.
 summaryRightJoin :: JoinStrategy (S.Seq FileAction)
-summaryRightJoin = summaryJoin (Delete LeftSide) (Copy RightSide)
+summaryRightJoin = summaryJoin (return . Just . Delete LeftSide)
+                               (return . Just . Copy RightSide)
+                               (const $ return Nothing)
 
 -- |Inner join. See 'summaryJoin'.
 summaryInnerJoin :: JoinStrategy (S.Seq FileAction)
-summaryInnerJoin = summaryJoin (Delete LeftSide) (Delete RightSide)
+summaryInnerJoin = summaryJoin (return . Just . Delete LeftSide)
+                               (return . Just . Delete RightSide)
+                               (const $ return Nothing)
 
 -- |Full outer join. See 'summaryJoin'.
 summaryOuterJoin :: JoinStrategy (S.Seq FileAction)
-summaryOuterJoin = summaryJoin (Copy LeftSide) (Copy RightSide)
+summaryOuterJoin = summaryJoin (return . Just . Copy LeftSide)
+                               (return . Just . Copy RightSide)
+                               (const $ return Nothing)
 
 -- |Takes a list of actions and runs them after asking the user
 --  for confirmation. Iff the user cancels, the function returns 'False'.

@@ -19,20 +19,21 @@ module System.IO.FileSync.JoinStrategies (
    performFileAction,
    performSummaryJoin,
    showFileAction,
+   -- ** Handlers for summary joins.
+   overwriteWithNewer,
+   overwriteWithLarger,
    ) where
 
-import Control.Exception
 import Data.Maybe
 import qualified Data.Sequence as S
 import qualified Data.Text as T
 import qualified Data.Tree as Tr
-import GHC.IO.Exception (IOErrorType(InappropriateType))
-import System.Directory (getDirectoryContents)
 import System.FilePath
 import System.IO.Error
 import System.REPL
 
 import System.IO.FileSync.Types
+import System.IO.FileSync.IO
 
 -- |Uncomment this line to mock writing IO functions.
 -- import System.IO.Mock
@@ -83,9 +84,9 @@ simpleOuterJoin _ _ _ _ = return (True, ())
 --  The Continue-part of the return value will be True iff the action handler
 --  returns Nothing.
 summaryJoin
-   :: (FilePath -> IO (Maybe FileAction)) -- ^Action for "left only" parts.
-   -> (FilePath -> IO (Maybe FileAction)) -- ^Action for "right only" parts.
-   -> (FilePath -> IO (Maybe FileAction)) -- ^Action for parts present in both trees.
+   :: DifferenceHandler -- ^Action for "left only" parts.
+   -> DifferenceHandler -- ^Action for "right only" parts.
+   -> DifferenceHandler -- ^Action for parts present in both trees.
    -> JoinStrategy (S.Seq FileAction)
 summaryJoin lA rA bA _ _ path (Tr.Node (diff, fp) _) = do
    let handler = case diff of {LeftOnly -> lA; RightOnly -> rA; Both -> bA}
@@ -159,9 +160,50 @@ performFileAction left right (Copy RightSide fp) = applyInsertAction right left 
 performFileAction left _ (Delete LeftSide fp) = applyDeleteAction left fp
 performFileAction _ right (Delete RightSide fp) = applyDeleteAction right fp
 
--- Utility functions
+-- Handlers for summary joins
 -------------------------------------------------------------------------------
 
+-- |Checks the modification times of two files/directories
+--  and returns a 'FileAction' to copy the newer over the older one.
+--
+--  Returns Nothing if:
+--
+--  * Getting the modification time of either entry throws a 'PermissionError'.
+--  * Both entries have the same modification time
+--
+--  Does not handle exceptions besides 'PermissionError'.
+overwriteWithNewer :: LeftRoot
+                   -> RightRoot
+                   -> DifferenceHandler
+overwriteWithNewer (LR lr) (RR rr) fp = do 
+   lT <- handleIOErrors [isPermissionError] $ getModificationTime (lr </> fp)
+   rT <- handleIOErrors [isPermissionError] $ getModificationTime (rr </> fp)
+   return $ if lT > rT then Just (Copy LeftSide fp)
+            else if lT < rT then Just (Copy RightSide fp)
+            else Nothing
+
+-- |Checks the modification times of two files/directories
+--  and returns a 'FileAction' to copy the newer over the older one.
+--
+--  Returns Nothing if:
+--
+--  * Either of the two entries is not a file
+--  * Getting the file size of either entry throws a 'PermissionError'.
+--  * Both entries have the same size.
+--
+--  Does not handle exceptions besides 'InappropriateType' and 'PermissionError'.
+overwriteWithLarger :: LeftRoot
+                   -> RightRoot
+                   -> DifferenceHandler
+overwriteWithLarger (LR lr) (RR rr) fp = do 
+   lT <- handleIOErrors [isPermissionError] $ getFileSize (lr </> fp)
+   rT <- handleIOErrors [isPermissionError] $ getFileSize (rr </> fp)
+   return $ if lT > rT then Just (Copy LeftSide fp)
+            else if lT < rT then Just (Copy RightSide fp)
+            else Nothing
+
+-- Utility functions
+-------------------------------------------------------------------------------
 
 -- |Deletes a file or directory. Does not handle exceptions.
 --  This function tries to remove the target of the given path
@@ -175,9 +217,9 @@ applyDeleteAction
    -> FilePath -- ^Path P in the tree, starting from the root.
    -> IO ()
 applyDeleteAction src path = 
-   catchJust noDirFoundException
-             (removeDirectoryRecursive sPath)
-             (const $ removeFile sPath)
+   catchThese [isDoesNotExistError, isInappropriateTypeError]
+              (removeDirectoryRecursive sPath)
+              (removeFile sPath)
    where
       sPath = getFilePath src </> path
 
@@ -194,42 +236,9 @@ applyInsertAction
    -> FilePath -- ^Path P in the tree, starting from the roots.
    -> IO ()
 applyInsertAction src trg path = 
-   catchJust noDirFoundException
-             (copyDirectory sPath tPath)
-             (const $ copyFile sPath tPath)
+   catchThese [isDoesNotExistError, isInappropriateTypeError]
+              (copyDirectory sPath tPath)
+              (copyFile sPath tPath)
    where
       sPath = getFilePath src </> path
       tPath = getFilePath trg </> path
-
--- |Copies a directory recursively. Tries to copy permissions.
---  Does not handle exceptions. The target directory will be created if it does not exist.
-copyDirectory :: FilePath -> FilePath -> IO ()
-copyDirectory src trg = go ""
-   where
-      -- Tries to copy a directory. Fails (safely) if (sPath </> path) is not a directory.
-      go :: FilePath -> IO ()
-      go path = do
-         let sPath = src </> path
-             tPath = trg </> path
-         -- if this succeeds, we have an existent directory and try to copy it
-         contents <- filter (not . flip elem [".",".."]) <$> getDirectoryContents sPath
-         createDirectory tPath
-         copyPermissions sPath tPath
-         -- recursive call. Note: no distinction between files and subdirectories.
-         -- that's in copyRec.
-         mapM_ (copyRec . (path </>)) contents
-
-      copyRec :: FilePath -> IO ()
-      copyRec path = catchJust noDirFoundException
-                               (go path)
-                               (const $ copyFile (src </> path) (trg </> path))
-
-
--- |Returns a Just iff the exception is of type "DoesNotExist"/"NoSuchThing".
-noDirFoundException :: IOError -> Maybe ()
-noDirFoundException e = 
-   if isDoesNotExistErrorType et || isInappropriateTypeErrorType et then Just () else Nothing
-   where
-      et = ioeGetErrorType e
-      isInappropriateTypeErrorType InappropriateType = True
-      isInappropriateTypeErrorType _ = False 

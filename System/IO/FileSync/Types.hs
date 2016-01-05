@@ -30,6 +30,8 @@ type JoinStrategy a =
    -> T.Tree (TreeDiff, FilePath)
    -> IO (Bool, a)
 
+type DifferenceHandler = FilePath -> IO (Maybe FileAction)
+
 data RootSide = LeftSide | RightSide
    deriving (Show, Eq, Ord, Enum, Bounded, Read)
 

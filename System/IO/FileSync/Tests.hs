@@ -5,6 +5,8 @@ import Control.Monad
 import qualified Data.Map as M
 import qualified Data.Sequence as S
 import qualified Data.Set as St
+import Data.Time.Calendar
+import Data.Time.Clock
 import qualified Data.Tree as Tr
 import System.Directory
 import System.IO
@@ -354,5 +356,15 @@ directoryStructureMatches fp xs = do
       dirsMatch <- and <$> mapM dirCall dirs
 
       return $ leavesMatch && dirsMatch
+
+-- |Sets the modification time of a file.
+--  The date will be set to the one given, the time will be set to 00:00.
+setModTime :: Integer -- ^Year
+           -> Int -- ^Month
+           -> Int -- ^Day
+           -> FilePath 
+           -> IO ()
+setModTime y m d fp =
+   setModificationTime fp $ UTCTime (fromGregorian y m d) $ secondsToDiffTime 0
 
 -------------------------------------------------------------------------------

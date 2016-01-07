@@ -21,3 +21,4 @@ Usage
 * [***STATUS: not feature-complete.***]
   As a standalone executable: `cabal build filesync-cli`.
   The main module is `System.IO.FileSync.CLI`.
+  

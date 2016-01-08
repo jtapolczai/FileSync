@@ -17,6 +17,7 @@ import Test.Hspec
 import Test.Hspec.Contrib.HUnit
 import Test.HUnit
 
+import System.IO.FileSync.IO
 import System.IO.FileSync.Join
 import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
@@ -55,7 +56,8 @@ tests = TestList
     TestLabel "summaryJoinI2_modTime_newer" $ TestCase summaryJoinI2_modTime_newer,
     TestLabel "summaryJoinI3_modTime_identical" $ TestCase summaryJoinI3_modTime_identical,
     TestLabel "summaryJoinI4_size_larger" $ TestCase summaryJoinI4_size_larger,
-    TestLabel "summaryJoinI5_size_identical" $ TestCase summaryJoinI5_size_identical
+    TestLabel "summaryJoinI5_size_identical" $ TestCase summaryJoinI5_size_identical,
+    TestLabel "getFileSize1" $ TestCase getFileSize1
     ]
 
 -- Create file tree
@@ -325,6 +327,18 @@ summaryJoinI5_size_identical = summaryJoin_template
           >> assertContent "bothL" "testDir/dir1/both/both.txt"
           >> putStrLn "second assert"
           >> assertContent "bothR" "testDir/dir2/both/both.txt"))
+
+-- Get file size
+-------------------------------------------------------------------------------
+
+getFileSize1 :: Assertion
+getFileSize1 = bracket'
+   testDirsL
+   (rmD "testDir")
+   (do fs1 <- getFileSize "testDir/dir1/both/both.txt"
+       assertEqual "both.txt file size" 5 fs1
+       fs2 <- getFileSize "testDir/dir1/both/both_onlyL/both_onlyL.txt"
+       assertEqual "both_onlyL.txt file size" 10 fs2)
 
 -- Test data
 -------------------------------------------------------------------------------

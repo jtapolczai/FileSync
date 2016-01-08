@@ -12,6 +12,7 @@ import System.IO.Error
 --
 --  May fail with:
 --
+--  * 'isInappropriateTypeError'
 --  * 'isPermissionError'
 --  * 'isDoesNotExistError'
 --  * 'isAlreadyInUseError'

@@ -301,7 +301,7 @@ summaryJoinI4_size_larger = summaryJoin_template
    (flip elem [Both])
    (summaryJoin (return . Just . Delete LeftSide)
                 (return . Just . Delete RightSide)
-                (overwriteWithNewer lr rr))
+                (overwriteWithLarger lr rr))
    Nothing
    (Just (--the left "both2" and the right "both3" are larger
           putStrLn "first assert"
@@ -318,7 +318,7 @@ summaryJoinI5_size_identical = summaryJoin_template
    (flip elem [Both])
    (summaryJoin (return . Just . Delete LeftSide)
                 (return . Just . Delete RightSide)
-                (overwriteWithNewer lr rr))
+                (overwriteWithLarger lr rr))
    Nothing
    (Just (--"both" should remain unchanged in both branches
           putStrLn "first assert"

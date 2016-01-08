@@ -201,8 +201,8 @@ overwriteWithLarger :: LeftRoot
                    -> RightRoot
                    -> DifferenceHandler
 overwriteWithLarger (LR lr) (RR rr) fp = do 
-   lT <- handleIOErrors [isPermissionError] $ getFileSize (lr </> fp)
-   rT <- handleIOErrors [isPermissionError] $ getFileSize (rr </> fp)
+   lT <- handleIOErrors [isPermissionError, isInappropriateTypeError] $ getFileSize (lr </> fp)
+   rT <- handleIOErrors [isPermissionError, isInappropriateTypeError] $ getFileSize (rr </> fp)
    return $ if lT > rT then Just (Copy LeftSide fp)
             else if lT < rT then Just (Copy RightSide fp)
             else Nothing

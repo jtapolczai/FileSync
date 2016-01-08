@@ -1,7 +1,8 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 module System.IO.FileSync.JoinStrategies (
    -- * Simple joins
@@ -40,38 +41,40 @@ import System.IO.FileSync.IO
 -- |Uncomment this line to use real writing IO functions.
 import System.Directory
 
+pattern JNode fp side <- Tr.Node (FTD fp _, side) _
+
 -- Simple joins
 -------------------------------------------------------------------------------
 
 -- |Left join. Performs all copying/deletions immediately.
 simpleLeftJoin :: JoinStrategy ()
-simpleLeftJoin left right path (Tr.Node (LeftOnly, fp) _) =
+simpleLeftJoin left right path (JNode fp LeftOnly) =
    applyInsertAction left right (path </> fp) >> return (False, ())
-simpleLeftJoin _ right path (Tr.Node (RightOnly, fp) _) =
+simpleLeftJoin _ right path (JNode fp RightOnly) =
    applyDeleteAction right (path </> fp) >> return (False, ())
 simpleLeftJoin _ _ _ _ = return (True, ())
 
 -- |Right join. Performs all copying/deletions immediately.
 simpleRightJoin :: JoinStrategy ()
-simpleRightJoin left _ path (Tr.Node (LeftOnly, fp) _) =
+simpleRightJoin left _ path (JNode fp LeftOnly) =
    applyDeleteAction left (path </> fp) >> return (False, ())
-simpleRightJoin left right path (Tr.Node (RightOnly, fp) _) =
+simpleRightJoin left right path (JNode fp RightOnly) =
    applyInsertAction right left (path </> fp) >> return (False, ())
 simpleRightJoin _ _ _ _ = return (True, ())
 
 -- |Inner join. Performs all copying/deletions immediately.
 simpleInnerJoin :: JoinStrategy ()
-simpleInnerJoin left _ path (Tr.Node (LeftOnly, fp) _) =
+simpleInnerJoin left _ path (JNode fp LeftOnly) =
    applyDeleteAction left (path </> fp) >> return (False, ())
-simpleInnerJoin _ right path (Tr.Node (RightOnly, fp) _) =
+simpleInnerJoin _ right path (JNode fp RightOnly) =
    applyDeleteAction right (path </> fp) >> return (False, ())
 simpleInnerJoin _ _ _ _ = return (True, ())
 
 -- |Full outer join. Performs all copying/deletions immediately.
 simpleOuterJoin :: JoinStrategy ()
-simpleOuterJoin left right path (Tr.Node (LeftOnly, fp) _) =
+simpleOuterJoin left right path (JNode fp LeftOnly) =
    applyInsertAction left right (path </> fp) >> return (False, ())
-simpleOuterJoin left right path (Tr.Node (RightOnly, fp) _) =
+simpleOuterJoin left right path (JNode fp RightOnly) =
    applyInsertAction right left (path </> fp) >> return (False, ())
 simpleOuterJoin _ _ _ _ = return (True, ())
 
@@ -88,10 +91,11 @@ summaryJoin
    -> DifferenceHandler -- ^Action for "right only" parts.
    -> DifferenceHandler -- ^Action for parts present in both trees.
    -> JoinStrategy (S.Seq FileAction)
-summaryJoin lA rA bA _ _ path (Tr.Node (diff, fp) _) = do
+summaryJoin lA rA bA _ _ path (JNode fp diff) = do
    let handler = case diff of {LeftOnly -> lA; RightOnly -> rA; Both -> bA}
    act <- handler (path </> fp)
    return (isNothing act, maybe S.empty S.singleton act)
+summaryJoin _ _ _ _ _ _ _ = error "summaryJoin: pattern match failure. This should never happen."
 
 -- |Left join. See 'summaryJoin'.
 summaryLeftJoin :: JoinStrategy (S.Seq FileAction)

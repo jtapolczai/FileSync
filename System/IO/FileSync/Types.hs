@@ -8,6 +8,12 @@ import qualified Data.Tree as T
 data TreeDiff = LeftOnly | RightOnly | Both
    deriving (Show, Eq, Ord, Read)
 
+data FileTreeData = FTD
+   {_fileTreeDataPath :: FilePath,
+    _fileTreeDataType :: EntryType
+   }
+   deriving (Eq, Show, Ord, Read)
+
 data EntryType = Directory | File
    deriving (Show, Eq, Ord, Read)
 
@@ -27,7 +33,7 @@ type JoinStrategy a =
    LeftRoot
    -> RightRoot
    -> FilePath
-   -> T.Tree (TreeDiff, FilePath)
+   -> T.Tree (FileTreeData, TreeDiff)
    -> IO (Bool, a)
 
 type DifferenceHandler = FilePath -> IO (Maybe FileAction)

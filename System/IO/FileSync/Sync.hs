@@ -18,17 +18,17 @@ import System.IO.FileSync.Types
 createFileTree
    :: FileRoot src
    => src
-   -> IO (T.Forest FilePath)
+   -> IO (T.Forest FileTreeData)
 createFileTree src = T.subForest <$> go "" (getFilePath src)
    where
       go root this =  do
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
          contents <- getDirectoryContents (root </> this)
          (files, dirs) <- partition fst <$> mapM isFile contents
-         let files' = map (\(_,x) -> T.Node x []) files
+         let files' = map (\(_,x) -> T.Node (FTD x File) []) files
              dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs
          children <- mapM (go $ root </> this) dirs'
-         return $ T.Node this $ files' ++ children
+         return $ T.Node (FTD this Directory) $ files' ++ children
 
 -- |Creates a difference tree between two directories.
 --  The roots themselves will not be included in the resultant tree,
@@ -36,7 +36,7 @@ createFileTree src = T.subForest <$> go "" (getFilePath src)
 createDiffTree
    :: LeftRoot
    -> RightRoot
-   -> IO (T.Forest (TreeDiff, FilePath))
+   -> IO (T.Forest (FileTreeData, TreeDiff))
 createDiffTree src trg = genericJoin <$> createFileTree src <*> createFileTree trg
 
 -- |Takes two root directories and synchronizes the tree that starts in them
@@ -47,11 +47,11 @@ syncTrees
    => JoinStrategy b
    -> LeftRoot
    -> RightRoot
-   -> T.Tree (TreeDiff, FilePath)
+   -> T.Tree (FileTreeData, TreeDiff)
    -> IO b
 syncTrees strategy src trg = go ""
    where
-      go path node@(T.Node (_,x) xs) = do
+      go path node@(T.Node (FTD x _,_) xs) = do
          (continue, res) <- strategy src trg path node
          if continue then mappend res <$> mconcat <$> mapM (go $ path </> x) xs
                      else return res
@@ -62,7 +62,7 @@ syncForests
    => JoinStrategy b
    -> LeftRoot
    -> RightRoot
-   -> T.Forest (TreeDiff, FilePath)
+   -> T.Forest (FileTreeData, TreeDiff)
    -> IO b
 syncForests strategy src trg = mapM (syncTrees strategy src trg) >=$> mconcat
 

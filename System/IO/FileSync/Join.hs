@@ -16,13 +16,13 @@ genericJoin
    :: (Ord a, Show a)
    => T.Forest a -- ^The left forest S.
    -> T.Forest a -- ^The right forest T.
-   -> T.Forest (TreeDiff, a)
+   -> T.Forest (a, TreeDiff)
 genericJoin ss ts =
    map (terminate LeftOnly) leftOnly
    ++ map (terminate RightOnly) rightOnly
    ++ map continue both
    where
-      toMap = M.fromListWith (\x y -> fmap snd $ head $ genericJoin [x] [y])
+      toMap = M.fromListWith (\x y -> fmap fst $ head $ genericJoin [x] [y])
               . map (T.rootLabel &&& id)
 
       -- convert lists of children to maps for effient difference/intersection
@@ -37,8 +37,8 @@ genericJoin ss ts =
 
       pairChildren (T.Node x xs) (T.Node _ ys) = (x,xs,ys)
 
-      continue (x,xs,ys) = T.Node (Both, x) $ genericJoin xs ys
-      terminate tag (T.Node x xs) = T.Node (tag, x) $ map (fmap (tag,)) xs
+      continue (x,xs,ys) = T.Node (x, Both) $ genericJoin xs ys
+      terminate tag (T.Node x xs) = T.Node (x, tag) $ map (fmap (,tag)) xs
 
 -- |Filters out all sub-trees whose roots fail a predicate.
 filterForest :: (a -> Bool) -> T.Forest a -> T.Forest a

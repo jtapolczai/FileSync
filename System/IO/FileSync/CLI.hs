@@ -45,7 +45,7 @@ maim = evalStateT repl []
          joinStrategyAsker
          (\_ src' trg' (_,strat) -> do
              exclusions <- get
-             let filtF = flip elem exclusions . normalise . snd
+             let filtF = flip elem exclusions . normalise . _fileTreeDataPath . fst
                  src = LR src'
                  trg = RR trg'
              diff <- filterForest filtF <$> liftIO (createDiffTree src trg)

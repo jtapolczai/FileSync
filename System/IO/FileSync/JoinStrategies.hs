@@ -166,21 +166,26 @@ performFileAction _ right (Delete RightSide fp) = applyDeleteAction right fp
 -- |Checks the modification times of two files/directories
 --  and returns a 'FileAction' to copy the newer over the older one.
 --
---  Returns Nothing if:
+--  Returns Nothing if any one of these holds:
 --
---  * Getting the modification time of either entry throws a 'PermissionError'.
---  * Both entries have the same modification time
+--  * Getting the modification time of either entry throws a 'PermissionError', or
+--  * both entries have the same modification time.
 --
 --  Does not handle exceptions besides 'PermissionError'.
 overwriteWithNewer :: LeftRoot
                    -> RightRoot
                    -> DifferenceHandler
-overwriteWithNewer (LR lr) (RR rr) fp = do 
-   lT <- handleIOErrors [isPermissionError] $ getModificationTime (lr </> fp)
-   rT <- handleIOErrors [isPermissionError] $ getModificationTime (rr </> fp)
-   return $ if lT > rT then Just (Copy LeftSide fp)
-            else if lT < rT then Just (Copy RightSide fp)
-            else Nothing
+overwriteWithNewer (LR lr) (RR rr) fp = let
+      lfp = lr </> fp
+      rfp = rr </> fp
+   in do
+      areDirs <- (&&) <$> doesDirectoryExist lfp <*> doesDirectoryExist rfp
+      if areDirs then return Nothing
+      else do lT <- handleIOErrors [isPermissionError] $ getModificationTime lfp
+              rT <- handleIOErrors [isPermissionError] $ getModificationTime rfp
+              return $ if lT > rT then Just (Copy LeftSide fp)
+                       else if lT < rT then Just (Copy RightSide fp)
+                       else Nothing
 
 -- |Checks the modification times of two files/directories
 --  and returns a 'FileAction' to copy the newer over the older one.

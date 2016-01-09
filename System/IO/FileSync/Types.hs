@@ -12,7 +12,10 @@ data FileTreeData = FTD
    {_fileTreeDataPath :: FilePath,
     _fileTreeDataType :: EntryType
    }
-   deriving (Eq, Show, Ord, Read)
+   deriving (Eq, Ord, Read)
+
+instance Show FileTreeData where
+   show (FTD fp t) = "FTD " ++ show fp ++ " " ++ show t
 
 data EntryType = Directory | File
    deriving (Show, Eq, Ord, Read)

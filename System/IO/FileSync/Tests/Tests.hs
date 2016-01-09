@@ -154,7 +154,7 @@ simpleJoin_template okElems strategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
    (do syncDirectories strategy lr rr
-       let dt' = map (fmap snd) $ filterForest (okElems . fst) dt1
+       let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
        ft1 <- sortForest <$> createFileTree lr
@@ -216,7 +216,7 @@ summaryJoin_template okElems strategy expectedActions ass = bracket'
                                  (St.fromList $ toList actions))
              expectedActions
        mapM (performFileAction lr rr) actions
-       let dt' = map (fmap snd) $ filterForest (okElems . fst) dt1
+       let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
        ft1 <- sortForest <$> createFileTree lr
@@ -383,44 +383,44 @@ testDirsR = do
    mkD "testDir/dir2/onlyR/r2/r3"
    mkF "testDir/dir2/onlyR/r2/r3" "rtxt.txt" "rtxt"
 
-ft1 :: Tr.Forest FilePath
-ft1 = [Tr.Node ("both")
-         [Tr.Node ("both1")
-            [Tr.Node ("both2.txt") [],
-             Tr.Node ("both3.txt") []],
-          Tr.Node ("both_onlyL")
-             [Tr.Node ("both_onlyL.txt") []],
-          Tr.Node ("both.txt") []],
-       Tr.Node ("onlyL")
-          [Tr.Node ("l1")
-             [Tr.Node ("l3")
-                [Tr.Node ("l4")
-                   [Tr.Node ("l2txt.txt") []]],
-              Tr.Node ("ltxt.txt") []],
-           Tr.Node ("l2") []]]
+ft1 :: Tr.Forest FileTreeData
+ft1 = [Tr.Node (FTD "both" Directory)
+         [Tr.Node (FTD "both1" Directory)
+            [Tr.Node (FTD "both2.txt" File) [],
+             Tr.Node (FTD "both3.txt" File) []],
+          Tr.Node (FTD "both_onlyL" Directory)
+             [Tr.Node (FTD "both_onlyL.txt" File) []],
+          Tr.Node (FTD "both.txt" File) []],
+       Tr.Node (FTD "onlyL" Directory)
+          [Tr.Node (FTD "l1" Directory)
+             [Tr.Node (FTD "l3" Directory)
+                [Tr.Node (FTD "l4" Directory)
+                   [Tr.Node (FTD "l2txt.txt" File) []]],
+              Tr.Node (FTD "ltxt.txt" File) []],
+           Tr.Node (FTD "l2" Directory) []]]
 
-dt1 :: Tr.Forest (TreeDiff, FilePath)
-dt1 = [Tr.Node (Both, "both")
-         [Tr.Node (Both, "both1")
-            [Tr.Node (Both, "both2.txt") [],
-             Tr.Node (Both, "both3.txt") []],
-          Tr.Node (LeftOnly, "both_onlyL")
-             [Tr.Node (LeftOnly, "both_onlyL.txt") []],
-          Tr.Node (RightOnly, "both_onlyR")
-             [Tr.Node (RightOnly, "both_onlyR.txt") []],
-          Tr.Node (Both, "both.txt") []],
-       Tr.Node (LeftOnly, "onlyL")
-          [Tr.Node (LeftOnly, "l1")
-             [Tr.Node (LeftOnly, "l3")
-                [Tr.Node (LeftOnly, "l4")
-                   [Tr.Node (LeftOnly, "l2txt.txt") []]],
-              Tr.Node (LeftOnly, "ltxt.txt") []],
-           Tr.Node (LeftOnly, "l2") []],
-       Tr.Node (RightOnly, "onlyR")
-          [Tr.Node (RightOnly, "r1") [],
-           Tr.Node (RightOnly, "r2")
-             [Tr.Node (RightOnly, "r3")
-                [Tr.Node (RightOnly, "rtxt.txt") []]]]]
+dt1 :: Tr.Forest (FileTreeData, TreeDiff)
+dt1 = [Tr.Node (FTD "both" Directory, Both)
+         [Tr.Node (FTD "both1" Directory, Both)
+            [Tr.Node (FTD "both2.txt" File, Both) [],
+             Tr.Node (FTD "both3.txt" File, Both) []],
+          Tr.Node (FTD "both_onlyL" Directory, LeftOnly)
+             [Tr.Node (FTD "both_onlyL.txt" File, LeftOnly) []],
+          Tr.Node (FTD "both_onlyR" Directory, RightOnly)
+             [Tr.Node (FTD "both_onlyR.txt" File, RightOnly) []],
+          Tr.Node (FTD "both.txt" File, Both) []],
+       Tr.Node (FTD "onlyL" Directory, LeftOnly)
+          [Tr.Node (FTD "l1" Directory, LeftOnly)
+             [Tr.Node (FTD "l3" Directory, LeftOnly)
+                [Tr.Node (FTD "l4" Directory, LeftOnly)
+                   [Tr.Node (FTD "l2txt.txt" File, LeftOnly) []]],
+              Tr.Node (FTD "ltxt.txt" File, LeftOnly) []],
+           Tr.Node (FTD "l2" Directory, LeftOnly) []],
+       Tr.Node (FTD "onlyR" Directory, RightOnly)
+          [Tr.Node (FTD "r1" Directory, RightOnly) [],
+           Tr.Node (FTD "r2" Directory, RightOnly)
+             [Tr.Node (FTD "r3" Directory, RightOnly)
+                [Tr.Node (FTD "rtxt.txt" File, RightOnly) []]]]]
 
 tr1 :: Tr.Tree Int
 tr1 = Tr.Node 1 [l 4, l 3, l 1, l 8, Tr.Node 7 [l 1, l 9]]
@@ -465,7 +465,7 @@ bracket' start end op = bracket start (const end) (const op)
 
 -- |Returns True iff the children of a given path match the elements of a forest.
 --  For files, the given forest has to be empty.
-directoryStructureMatches :: FilePath -> Tr.Forest FilePath -> IO Bool
+directoryStructureMatches :: FilePath -> Tr.Forest FileTreeData -> IO Bool
 directoryStructureMatches fp xs = do
    isFile <- doesFileExist fp
    isDir <- doesDirectoryExist fp
@@ -476,10 +476,13 @@ directoryStructureMatches fp xs = do
       dirs <- filterM doesDirectoryExist contents
       files <- St.fromList <$> filterM doesFileExist contents
 
-      let leaves = St.fromList . map Tr.rootLabel . filter (null . Tr.subForest) $ xs
-          xsMap = M.fromList . map (\(Tr.Node y ys) -> (y,ys)) $ xs
+      let leaves = St.fromList
+                   . map (_fileTreeDataPath . Tr.rootLabel)
+                   . filter ((File==) . _fileTreeDataType . Tr.rootLabel)
+                   $ xs
+          xsMap = M.fromList . map (\(Tr.Node (FTD y _) ys) -> (y,ys)) $ xs
 
-          leavesMatch = files `St.isSubsetOf` leaves
+          leavesMatch = files == leaves
 
           dirCall :: FilePath -> IO Bool
           dirCall d = maybe (return False) (directoryStructureMatches $ fp </> d) (M.lookup d xsMap)

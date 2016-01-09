@@ -1,9 +1,42 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module System.IO.FileSync.Types where
 
 import Data.Char
+import qualified Data.Map as M
+import qualified Data.Set as St
 import qualified Data.Tree as T
+
+-- |Loose equality which may equate different values.
+--
+--  The following should hold:
+--
+-- @
+--  (x == y) ==> (x =~= y)
+-- @
+--
+-- @
+-- (reduce a == reduce b) <==> (a =~= b)
+-- @
+--
+-- Ideally, instances should also form equivalence classes (i.e. =~= should
+-- be reflexive, symmetric and transitive).
+class Eq a => LooseEq a where
+   -- |Loose comparison of values.
+   --  The default implementation is '=='.
+   (=~=) :: a -> a -> Bool
+   (=~=) = (==)
+
+   type Reduct a :: *
+   type instance Reduct a = a
+
+   -- |Gets the reduct of a value - the fragment which really decides equality in the sense of '=='.
+   --  The default implementation is 'id'.
+   reduce :: a -> Reduct a
+
+-- |A collection of equivalence classes, with each class represented by a single element.
+type EqClasses k v = M.Map k (St.Set v)
 
 data TreeDiff = LeftOnly | RightOnly | Both
    deriving (Show, Eq, Ord, Read)

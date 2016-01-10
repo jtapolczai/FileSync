@@ -9,17 +9,20 @@ import Control.Monad.Writer
 import qualified Data.Foldable as F
 import Data.List
 import qualified Data.Map as M
+import Data.Maybe
 import qualified Data.Sequence as S
 import qualified Data.Set as St
 import qualified Data.Tree as T
 
 import System.IO.FileSync.Types
 
+import Debug.Trace
+
 -- |Generic join that computer the set of differences between two forests.
 --  Ordering of subtrees is __not__ guaranteed. Subtrees with identical
 --  roots (according to '==') are merged.
 genericJoin
-   :: forall a.(LooseEq a, Ord a, Ord (Reduct a), Show a)
+   :: forall a.(LooseEq a, Ord a, Ord (Reduct a), Show a, Show (Reduct a))
    => T.Forest a -- ^The left forest S.
    -> T.Forest a -- ^The right forest T.
    -> T.Forest (St.Set a, TreeDiff) -- ^Joined forest. Values equal according to '=~='
@@ -31,8 +34,10 @@ genericJoin ss ts =
 
       groupChildren :: [(T.Tree a, TreeDiff)]
                     -> EqClasses (Reduct a) (T.Tree a, TreeDiff)
-      groupChildren xs = foldl' f M.empty xs
+      groupChildren xs = trace "[groupChildren]" $ traceShow ret $ ret
          where
+            ret = foldl' f M.empty xs
+
             f acc val =
                M.insertWith (\_ old -> old S.|> val)
                             (reduce . T.rootLabel . fst $ val)
@@ -40,14 +45,14 @@ genericJoin ss ts =
                             acc
 
       recurse :: F.Foldable f => f (T.Tree a, TreeDiff) -> T.Tree (St.Set a, TreeDiff)
-      recurse = mkNode . F.foldl' f (St.empty, Both, S.empty, S.empty)
+      recurse = mkNode . F.foldl' f (St.empty, Nothing, S.empty, S.empty)
          where
             mkNode (x, side, ls, rs) =
-               T.Node (x, side) $ genericJoin (F.toList ls) (F.toList rs) 
+               T.Node (x, fromMaybe (error "genericJoin.recurse: empty equivalence class!") side) $ genericJoin (F.toList ls) (F.toList rs) 
 
             f (vals, accSide, ls, rs) (T.Node x xs, side) =
                (St.insert x vals,
-                if accSide == side then side else Both,
+                maybe (Just side) (\a -> if a == side then accSide else Just Both) accSide,
                 if side == LeftOnly then S.fromList xs S.>< ls else ls,
                 if side == RightOnly then S.fromList xs S.>< rs else rs)
 

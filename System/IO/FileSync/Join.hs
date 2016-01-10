@@ -31,7 +31,7 @@ genericJoin ss ts =
 
       groupChildren :: [(T.Tree a, TreeDiff)]
                     -> EqClasses (Reduct a) (T.Tree a, TreeDiff)
-      groupChildren = foldl' f $ M.empty
+      groupChildren xs = foldl' f M.empty xs
          where
             f acc val =
                M.insertWith (\_ old -> old S.|> val)
@@ -39,7 +39,7 @@ genericJoin ss ts =
                             (S.singleton val)
                             acc
 
-      recurse :: St.Set (T.Tree a, TreeDiff) -> T.Tree (St.Set a, TreeDiff)
+      recurse :: F.Foldable f => f (T.Tree a, TreeDiff) -> T.Tree (St.Set a, TreeDiff)
       recurse = mkNode . F.foldl' f (St.empty, Both, S.empty, S.empty)
          where
             mkNode (x, side, ls, rs) =

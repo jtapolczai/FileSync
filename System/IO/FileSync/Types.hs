@@ -9,7 +9,6 @@ import Control.Exception
 import Data.Char
 import qualified Data.Map as M
 import qualified Data.Sequence as S
-import qualified Data.Set as St
 import qualified Data.Tree as T
 import Data.Typeable
 

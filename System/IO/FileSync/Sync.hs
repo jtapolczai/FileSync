@@ -1,11 +1,18 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
+
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module System.IO.FileSync.Sync where
 
+import Control.Monad.Trans.Either
+import Control.Monad.Writer
 import Data.List
 import Data.Ord
+import qualified Data.Foldable as F
 import Data.Functor.Monadic
+import qualified Data.Sequence as S
+import qualified Data.Set as St
 import qualified Data.Tree as T
 import System.Directory
 import System.FilePath
@@ -33,11 +40,21 @@ createFileTree src = T.subForest <$> go "" (getFilePath src)
 -- |Creates a difference tree between two directories.
 --  The roots themselves will not be included in the resultant tree,
 --  only their children.
+--
+--  If identically named entries occur as directories in one directory
+--  in one root and as files in another, a list of conflicts will be returned instead.
 createDiffTree
    :: LeftRoot
    -> RightRoot
-   -> IO (T.Forest (FileTreeData, TreeDiff))
-createDiffTree src trg = genericJoin <$> createFileTree src <*> createFileTree trg
+   -> EitherT (S.Seq FileDirectoryConflict) IO (T.Forest (FileTreeData, TreeDiff))
+createDiffTree src trg = do
+   forest <- lift $ genericJoin <$> createFileTree src <*> createFileTree trg
+   let (cleanedForest, errors) = runWriter $ reforest recordKeyConflicts forest
+       mkError xs =
+          FileDirectoryConflict (_fileTreeDataPath . head . F.toList $ xs)
+
+   if S.null errors then right cleanedForest
+                    else left . fmap mkError $ errors
 
 -- |Takes two root directories and synchronizes the tree that starts in them
 --  using a given strategy. The tree's root should be an immediate child of
@@ -73,10 +90,10 @@ syncDirectories
    => JoinStrategy b
    -> LeftRoot
    -> RightRoot
-   -> IO b
+   -> EitherT (S.Seq FileDirectoryConflict) IO b
 syncDirectories strategy src trg =
    createDiffTree src trg
-   >>= syncForests strategy src trg
+   >>= lift . syncForests strategy src trg
 
 -- |Recursively sorts a forest according to the keys.
 sortForest :: Ord a => T.Forest a -> T.Forest a

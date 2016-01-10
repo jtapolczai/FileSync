@@ -5,6 +5,7 @@
 
 module System.IO.FileSync.Join where
 
+import Control.Monad.Writer
 import qualified Data.Foldable as F
 import Data.List
 import qualified Data.Map as M
@@ -18,7 +19,7 @@ import System.IO.FileSync.Types
 --  Ordering of subtrees is __not__ guaranteed. Subtrees with identical
 --  roots (according to '==') are merged.
 genericJoin
-   :: forall a.(LooseEq a, Ord a, Ord (Reduct a), Show a, Ord (T.Tree a))
+   :: forall a.(LooseEq a, Ord a, Ord (Reduct a), Show a)
    => T.Forest a -- ^The left forest S.
    -> T.Forest a -- ^The right forest T.
    -> T.Forest (St.Set a, TreeDiff) -- ^Joined forest. Values equal according to '=~='
@@ -33,9 +34,9 @@ genericJoin ss ts =
       groupChildren = foldl' f $ M.empty
          where
             f acc val =
-               M.insertWith (\_ old -> St.insert val old)
+               M.insertWith (\_ old -> old S.|> val)
                             (reduce . T.rootLabel . fst $ val)
-                            (St.singleton val)
+                            (S.singleton val)
                             acc
 
       recurse :: St.Set (T.Tree a, TreeDiff) -> T.Tree (St.Set a, TreeDiff)
@@ -56,9 +57,13 @@ filterForest pred = map filterForest' . filter (pred . T.rootLabel)
    where
       filterForest' (T.Node x xs) = T.Node x $ filterForest pred xs
 
--- |Applies a function to every node of a forest. Iff the function fails
---  for any node of any tree, Nothing is returned.
-reforest :: (a -> Maybe b) -> T.Forest a -> Maybe (T.Forest b)
+-- |Applies a function to every node of a forest.
+--
+--  Use cases:
+--
+--  * Applying a Maybe-returing function to check some condition;
+--  * Applying a Writer to record errors.
+reforest :: Monad f => (a -> f b) -> T.Forest a -> f (T.Forest b)
 reforest f = mapM (traverse f)
 
 -- |Returns Nothing iff the length of the 'FileTreeData'-list is @/=1@,
@@ -68,4 +73,19 @@ reforest f = mapM (traverse f)
 -- |Tries to extract the first element of the list. Fails if the list
 --  contains anything else than exactly 1 element.
 onlyOneKey :: Eq a => ([a], b) -> Maybe (a, b)
-onlyOneKey (xs,y) = if take 1 xs /= xs then Nothing else Just $ (head xs, y)
+onlyOneKey ([x],y) = Just (x,y)
+onlyOneKey _ = Nothing
+
+-- |Records all instances in which there are multiple keys in a node.
+--  The first two keys are put into an exception.
+--
+--  Will fail in case of 0-size key lists.
+recordKeyConflicts
+   :: (MonadWriter (S.Seq (St.Set a)) m, Eq a)
+   => (St.Set a, b)
+   -> m (a, b)
+recordKeyConflicts (x,y) = go (St.toList x) y
+   where
+      go [] _ = error "recordKeyConflicts: empty key list."
+      go [x1] y = return (x1,y)
+      go (x1:_) y = tell (S.singleton x) >> return (x1, y)

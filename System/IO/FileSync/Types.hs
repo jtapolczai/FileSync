@@ -1,33 +1,29 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module System.IO.FileSync.Types where
 
+import Control.Exception
 import Data.Char
 import qualified Data.Map as M
+import qualified Data.Sequence as S
 import qualified Data.Set as St
 import qualified Data.Tree as T
+import Data.Typeable
 
 -- |Loose equality which may equate different values.
 --
 --  The following should hold:
 --
 -- @
---  (x == y) ==> (x =~= y)
--- @
---
--- @
--- (reduce a == reduce b) <==> (a =~= b)
+--  (x == y) ==> (reduct x == reduct y)
 -- @
 --
 -- Ideally, instances should also form equivalence classes (i.e. =~= should
 -- be reflexive, symmetric and transitive).
 class Eq a => LooseEq a where
-   -- |Loose comparison of values.
-   --  The default implementation is '=='.
-   (=~=) :: a -> a -> Bool
-   (=~=) = (==)
-
    type Reduct a :: *
    type instance Reduct a = a
 
@@ -35,8 +31,16 @@ class Eq a => LooseEq a where
    --  The default implementation is 'id'.
    reduce :: a -> Reduct a
 
+-- |Loose comparison of values.
+--
+-- @
+-- (x =~= y)   ===   (reduct x == reduct y)
+-- @
+(=~=) :: (Eq (Reduct a), LooseEq a) => a -> a -> Bool
+(=~=) x y = reduce x == reduce y
+
 -- |A collection of equivalence classes, with each class represented by a single element.
-type EqClasses k v = M.Map k (St.Set v)
+type EqClasses k v = M.Map k (S.Seq v)
 
 data TreeDiff = LeftOnly | RightOnly | Both
    deriving (Show, Eq, Ord, Read)
@@ -49,6 +53,11 @@ data FileTreeData = FTD
 
 instance Show FileTreeData where
    show (FTD fp t) = "FTD " ++ show fp ++ " " ++ show t
+
+-- |Loose equality is decided based on '_fileTreeDataPath'.
+instance LooseEq FileTreeData where
+   type Reduct FileTreeData = FilePath
+   reduce (FTD fp _) = fp
 
 data EntryType = Directory | File
    deriving (Show, Eq, Ord, Read)
@@ -92,3 +101,11 @@ instance Read YesNo where
                                   ('Y', Yes),
                                   ('n', No),
                                   ('N', No)]
+
+-- Exceptions
+-------------------------------------------------------------------------------
+
+-- |Indicates that an entry is a file in one place and a directory in another.
+data FileDirectoryConflict = FileDirectoryConflict FilePath deriving (Show, Typeable)
+
+instance Exception FileDirectoryConflict

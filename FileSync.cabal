@@ -18,16 +18,25 @@ Test-Suite unit-tests
   type:                exitcode-stdio-1.0
   main-is:             System/IO/FileSync/Tests.hs
   default-language:    Haskell2010
+  other-extensions:    DeriveDataTypeable,
+                       ExistentialQuantification,
+                       FlexibleContexts,
+                       LambdaCase,
+                       OverloadedStrings,
+                       ScopedTypeVariables,
+                       TupleSections,
+                       TypeFamilies
   build-depends:       base >=4.8 && <5, containers >=0.5 && <1, mtl >=2.2 && <3, exceptions >=0.8 && <1, transformers >=0.4 && <0.8, monad-loops >=0.4 && <0.8, semigroupoids >=5.0 && <6, functor-monadic >=0.1 && <1, listsafe >=0.1 && <1, ListLike >=4.2 && <5, text >=1.2 && <2, parsec >=3.1 && <4, aeson >=0.10 && <0.20, bytestring >=0.10 && <0.20, data-default >=0.5 && <1, filepath >=1.4 && <2, directory >=1.2.3 && <2, hspec >=2.2 && <3, hspec-contrib >=0.3 && <1, HUnit >=1.3 && <2, time >=1.4 && <1.8, repl-toolkit >=1 && <1.2, either >3 && <5
 
 library
   exposed-modules:     Main, System.IO.Mock, System.IO.FileSync.Join, System.IO.FileSync.Types, System.IO.FileSync.Sync, System.IO.FileSync.CLI, System.IO.FileSync.JoinStrategies
-  other-extensions:    OverloadedStrings,
-                       DeriveDataTypeable,
+  other-extensions:    DeriveDataTypeable,
                        ExistentialQuantification,
-                       ScopedTypeVariables,
                        FlexibleContexts,
                        LambdaCase,
-                       TupleSections
+                       OverloadedStrings,
+                       ScopedTypeVariables,
+                       TupleSections,
+                       TypeFamilies
   build-depends:       base >=4.8 && <5, containers >=0.5 && <1, mtl >=2.2 && <3, exceptions >=0.8 && <1, transformers >=0.4 && <0.8, monad-loops >=0.4 && <0.8, semigroupoids >=5.0 && <6, functor-monadic >=0.1 && <1, listsafe >=0.1 && <1, ListLike >=4.2 && <5, text >=1.2 && <2, parsec >=3.1 && <4, aeson >=0.10 && <0.20, bytestring >=0.10 && <0.20, data-default >=0.5 && <1, filepath >=1.4 && <2, directory >=1.2.3 && <2, hspec >=2.2 && <3, hspec-contrib >=0.3 && <1, HUnit >=1.3 && <2, time >=1.4 && <1.8, repl-toolkit >=1 && <1.2, either >3 && <5
   default-language:    Haskell2010

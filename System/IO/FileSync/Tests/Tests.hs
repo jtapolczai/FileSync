@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module System.IO.FileSync.Tests.Tests where
 
 import Control.Exception
@@ -25,6 +27,12 @@ import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 
+data TwoKey = TK String String deriving (Show, Eq, Ord)
+
+instance LooseEq TwoKey where
+   type Reduct TwoKey = String
+   reduce (TK s _) = s
+
 runTests :: IO ()
 runTests = hspec . fromHUnitTest $ tests
 
@@ -33,6 +41,7 @@ tests = TestList
     TestLabel "createFileTree1" $ TestCase createFileTree1,
     TestLabel "createEmptyDiffTree" $ TestCase createEmptyDiffTree,
     TestLabel "createDiffTree1" $ TestCase createDiffTree1,
+    TestLabel "createDiffTree2" $ TestCase createDiffTree2,
     TestLabel "sortTree1" $ TestCase sortTree1,
     TestLabel "sortTree2" $ TestCase sortTree2,
     TestLabel "sortTree3" $ TestCase sortTree3,
@@ -104,6 +113,13 @@ createDiffTree1 = bracket'
        putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
        assertEqual "diff tree 1" (sortForest dt1) (sortForest t))
 
+createDiffTree2 :: Assertion
+createDiffTree2 = bracket'
+   (testDirsL >> testDirsR)
+   (rmD "testDir")
+   (assertEqual "duplicate-containing forests"
+                (sortForest $ genericJoin [tr4] [tr5])
+                (sortForest [tr6]))
 -- Sort forest
 -------------------------------------------------------------------------------
 
@@ -283,14 +299,10 @@ summaryJoinI2_modTime_newer = summaryJoin_template
           Copy RightSide "both/both1/both2.txt",
           Copy LeftSide "both/both1/both3.txt"])
    (Just (--the right "both2" and the left "both3" are newer
-          putStrLn "first assert"
-          >> assertContent "both2_right" "testDir/dir1/both/both1/both2.txt"
-          >> putStrLn "second assert"
+          assertContent "both2_right" "testDir/dir1/both/both1/both2.txt"
           >> assertContent "both2_right" "testDir/dir2/both/both1/both2.txt"
 
-          >> putStrLn "third assert"
           >> assertContent "both3_left" "testDir/dir1/both/both1/both3.txt"
-          >> putStrLn "fourth assert"
           >> assertContent "both3_left" "testDir/dir2/both/both1/both3.txt"))
 
 summaryJoinI3_modTime_identical :: Assertion
@@ -312,13 +324,9 @@ summaryJoinI4_size_larger = summaryJoin_template
                 (overwriteWithLarger lr rr))
    Nothing
    (Just (--the left "both2" and the right "both3" are larger
-          putStrLn "first assert"
-          >> assertContent "both2_left larger" "testDir/dir1/both/both1/both2.txt"
-          >> putStrLn "second assert"
+          assertContent "both2_left larger" "testDir/dir1/both/both1/both2.txt"
           >> assertContent "both2_left larger" "testDir/dir2/both/both1/both2.txt"
-          >> putStrLn "third assert"
           >> assertContent "both3_right larger" "testDir/dir1/both/both1/both3.txt"
-          >> putStrLn "fourth assert"
           >> assertContent "both3_right larger" "testDir/dir2/both/both1/both3.txt"))
 
 summaryJoinI5_size_identical :: Assertion
@@ -329,9 +337,7 @@ summaryJoinI5_size_identical = summaryJoin_template
                 (overwriteWithLarger lr rr))
    Nothing
    (Just (--"both" should remain unchanged in both branches
-          putStrLn "first assert"
-          >> assertContent "bothL" "testDir/dir1/both/both.txt"
-          >> putStrLn "second assert"
+          assertContent "bothL" "testDir/dir1/both/both.txt"
           >> assertContent "bothR" "testDir/dir2/both/both.txt"))
 
 -- Get file size
@@ -436,6 +442,37 @@ tr2 = Tr.Node 1 [l 1, l 4, Tr.Node 7 [l 9, l 1], l 8, l 3]
 
 tr3 :: Tr.Tree Int
 tr3 = Tr.Node 1 [l 1, l 2, Tr.Node 5 [l 9, l 1], l 8, l 3]
+
+tr4 :: Tr.Tree TwoKey
+tr4 = Tr.Node (TK "A" "x")
+              [Tr.Node (TK "B1" "a") [l (TK "alpha" ""), l (TK "alphaL" "")],
+               Tr.Node (TK "B1" "b") [l (TK "betaGamma" ""), l (TK "beta" "")],
+               Tr.Node (TK "B2" "") [l (TK "b2" "")]]
+
+tr5 :: Tr.Tree TwoKey
+tr5 = Tr.Node (TK "A" "y")
+              [Tr.Node (TK "B1" "a") [l (TK "alpha" ""), l (TK "alphaR" "")],
+               Tr.Node (TK "B1" "c") [l (TK "betaGamma" ""), l (TK "gamma" "")],
+               Tr.Node (TK "B1" "d") [l (TK "delta" "")],
+               Tr.Node (TK "C" "") [l (TK "c" "")]]
+
+tr6 :: Tr.Tree (St.Set TwoKey, TreeDiff)
+tr6 = Tr.Node (St.fromList [(TK "A" "x"), (TK "A" "y")], Both)
+              [Tr.Node (St.fromList [(TK "B1" "a"),
+                                     (TK "B1" "b"),
+                                     (TK "B1" "c"),
+                                     (TK "B1" "d")], Both)
+                       [l (St.fromList [(TK "alpha" "")], Both),
+                        l (St.fromList [(TK "alphaL" "")], LeftOnly),
+                        l (St.fromList [(TK "alphaR" "")], RightOnly),
+                        l (St.fromList [(TK "betaGamma" "")], Both),
+                        l (St.fromList [(TK "beta" "")], LeftOnly),
+                        l (St.fromList [(TK "gamma" "")], RightOnly),
+                        l (St.fromList [(TK "delta" "")], RightOnly)],
+               Tr.Node (St.fromList [(TK "B2" "")], LeftOnly)
+                       [l (St.fromList [(TK "b2" "")], LeftOnly)],
+               Tr.Node (St.fromList [(TK "C" "")], RightOnly)
+                       [l (St.fromList [(TK "c" "")], RightOnly)]]
 
 lr :: LeftRoot
 lr = LR "testDir/dir1"

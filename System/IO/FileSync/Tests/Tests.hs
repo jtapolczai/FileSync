@@ -2,6 +2,8 @@ module System.IO.FileSync.Tests.Tests where
 
 import Control.Exception
 import Control.Monad
+import Control.Monad.Trans.Either
+import Data.Either
 import Data.Foldable (toList)
 import qualified Data.Map as M
 import Data.Maybe
@@ -88,14 +90,14 @@ createEmptyDiffTree :: Assertion
 createEmptyDiffTree = bracket'
    (mkD "testDir/empty")
    (rmD "testDir")
-   (do t <- createDiffTree (LR "testDir/empty") (RR "testDir/empty")
+   (do (Right t) <- runEitherT $ createDiffTree (LR "testDir/empty") (RR "testDir/empty")
        assertEqual "empty file tree" [] t)
 
 createDiffTree1 :: Assertion
 createDiffTree1 = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do t <- createDiffTree lr rr
+   (do (Right t) <- runEitherT $ createDiffTree lr rr
        putStrLn "Expected forest:"
        putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
        putStrLn "Actual forest:"
@@ -153,7 +155,8 @@ simpleJoin_template :: (TreeDiff -> Bool)
 simpleJoin_template okElems strategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do syncDirectories strategy lr rr
+   (do res <- runEitherT $ syncDirectories strategy lr rr
+       assertBool "synDirectories must be successful" (isRight res)
        let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
@@ -183,7 +186,8 @@ summaryJoin_noChange_template joinStrategy = bracket'
    (rmD "testDir")
    (do ftInitL <- sortForest <$> createFileTree lr
        ftInitR <- sortForest <$> createFileTree rr
-       syncDirectories joinStrategy lr rr
+       res <- runEitherT $ syncDirectories joinStrategy lr rr
+       assertBool "synDirectories must be successful" (isRight res)
        ftOutL <- sortForest <$> createFileTree lr
        ftOutR <- sortForest <$> createFileTree rr
        assertBool "left directory didn't change without join" $ ftInitL == ftOutL
@@ -209,7 +213,9 @@ summaryJoin_template :: (TreeDiff -> Bool)
 summaryJoin_template okElems strategy expectedActions ass = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do actions <- syncDirectories strategy lr rr
+   (do actions' <- runEitherT $ syncDirectories strategy lr rr
+       assertBool "synDirectories must be successful" (isRight actions')
+       let actions = fromRight actions'
        maybe (return ())
              (\ea -> assertEqual "list of FileActions" 
                                  (St.fromList ea) 
@@ -506,5 +512,9 @@ assertContent :: String -> FilePath -> Assertion
 assertContent content fp = do
    fileContent <- readFile fp
    assertEqual ("contents of file " ++ fp) content fileContent
+
+fromRight :: Either a b -> b
+fromRight (Right x) = x
+fromRight _ = error "fromRight: got a Left"
 
 -------------------------------------------------------------------------------

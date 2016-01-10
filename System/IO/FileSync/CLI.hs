@@ -7,6 +7,7 @@ import Prelude hiding (putStrLn)
 import Control.Exception (IOException)
 import Control.Monad.Catch
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Either
 import Control.Monad.Trans.State
 import Data.Functor.Monadic
 import qualified Data.Map as M
@@ -48,8 +49,11 @@ maim = evalStateT repl []
              let filtF = flip elem exclusions . normalise . _fileTreeDataPath . fst
                  src = LR src'
                  trg = RR trg'
-             diff <- filterForest filtF <$> liftIO (createDiffTree src trg)
-             liftIO $ syncForests strat src trg diff)
+             diff <- liftIO $ runEitherT (createDiffTree src trg)
+
+             liftIO $ case diff of
+                         (Left errs) -> putStrLn ("errors during diff tree creation" :: String)
+                         (Right diff') -> syncForests strat src trg (filterForest filtF diff'))
 
       cmdList :: Cmd
       cmdList = makeCommand

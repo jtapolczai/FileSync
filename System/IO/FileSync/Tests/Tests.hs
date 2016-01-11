@@ -39,6 +39,7 @@ runTests = hspec . fromHUnitTest $ tests
 tests = TestList
    [TestLabel "createEmptyFileTree" $ TestCase createEmptyFileTree,
     TestLabel "createFileTree1" $ TestCase createFileTree1,
+    TestLabel "createFileTree2" $ TestCase createFileTree2,
     TestLabel "createEmptyDiffTree" $ TestCase createEmptyDiffTree,
     TestLabel "createDiffTree1" $ TestCase createDiffTree1,
     TestLabel "createDiffTree2" $ TestCase createDiffTree2,
@@ -91,6 +92,13 @@ createFileTree1 = bracket'
        putStrLn "Actual forest:"
        putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
        assertEqual "file tree 1" (sortForest ft1) (sortForest t))
+
+createFileTree2 :: Assertion
+createFileTree2 = bracket'
+   testDirsL
+   (rmD "testDir")
+   (do t <- createFileTree (LR "testDir/dir1/both/both.txt")
+       assertEqual "file tree 2" t [Tr.Node (FTD "both.txt" File) []])
 
 -- Create diff tree
 -------------------------------------------------------------------------------

@@ -21,6 +21,8 @@ import System.IO.FileSync.Types
 
 -- |Takes a root directory and creates a tree representing its structure,
 --  starting with the immediate children.
+--
+--  Will create a one-element forest if the root is a file.
 createFileTree
    :: FileRoot src
    => src
@@ -29,12 +31,15 @@ createFileTree src = T.subForest <$> go "" (getFilePath src)
    where
       go root this =  do
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
-         contents <- getDirectoryContents (root </> this)
-         (files, dirs) <- partition fst <$> mapM isFile contents
-         let files' = map (\(_,x) -> T.Node (FTD x File) []) files
-             dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs
-         children <- mapM (go $ root </> this) dirs'
-         return $ T.Node (FTD this Directory) $ files' ++ children
+         thisIsFile <- doesFileExist this
+         if thisIsFile then return $ T.Node (FTD this File) [T.Node (FTD (takeFileName this) File) []]
+         else do
+            contents <- getDirectoryContents (root </> this)
+            (files, dirs) <- partition fst <$> mapM isFile contents
+            let files' = map (\(_,x) -> T.Node (FTD x File) []) files
+                dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs
+            children <- mapM (go $ root </> this) dirs'
+            return $ T.Node (FTD this Directory) $ files' ++ children
 
 -- |Creates a difference tree between two directories.
 --  The roots themselves will not be included in the resultant tree,

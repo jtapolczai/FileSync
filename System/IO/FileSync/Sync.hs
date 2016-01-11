@@ -12,7 +12,6 @@ import Data.Ord
 import qualified Data.Foldable as F
 import Data.Functor.Monadic
 import qualified Data.Sequence as S
-import qualified Data.Set as St
 import qualified Data.Tree as T
 import System.Directory
 import System.FilePath

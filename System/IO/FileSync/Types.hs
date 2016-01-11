@@ -105,6 +105,6 @@ instance Read YesNo where
 -------------------------------------------------------------------------------
 
 -- |Indicates that an entry is a file in one place and a directory in another.
-data FileDirectoryConflict = FileDirectoryConflict FilePath deriving (Show, Typeable)
+data FileDirectoryConflict = FileDirectoryConflict{fromFTD :: FilePath} deriving (Show, Typeable)
 
 instance Exception FileDirectoryConflict

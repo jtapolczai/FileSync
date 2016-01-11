@@ -9,31 +9,40 @@ import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Either
 import Control.Monad.Trans.State
+import qualified Data.Foldable as F
 import Data.Functor.Monadic
 import qualified Data.Map as M
+import Data.Maybe
 import Data.Monoid
 import qualified Data.Sequence as S
+import qualified Data.Set as St
 import qualified Data.Text as T
 import System.FilePath
 import System.IO.FileSync.Join
 import System.IO.FileSync.JoinStrategies
+import System.IO.FileSync.Rename
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 import System.REPL
 import System.REPL.Prompt (putStrLn, prompt)
 import System.REPL.Types (PathExistenceType(..))
 
-type AppState = [FilePath]
+data AppState = AppState {
+   _appStateExclusions :: [FilePath],
+   _appStateLastDirs :: Maybe (FilePath, FilePath),
+   _appStateConflicts :: [FilePath]
+   }
+
 type Cmd = Command (StateT AppState IO) T.Text ()
 
 maim :: IO ()
-maim = evalStateT repl []
+maim = evalStateT repl (AppState [] Nothing [])
    where
       repl = makeREPL commands cmdExit cmdUnknown prompt
                       [Handler unknownCommandHandler,
                        Handler otherIOErrorHandler]
 
-      commands = [cmdSync, cmdList, cmdExcl, cmdHelp]
+      commands = [cmdSync, cmdList, cmdExcl, cmdRename, cmdHelp]
 
       cmdSync :: Cmd
       cmdSync = makeCommand3
@@ -45,15 +54,26 @@ maim = evalStateT repl []
          (dirAsker "Enter target directory: ")
          joinStrategyAsker
          (\_ src' trg' (_,strat) -> do
-             exclusions <- get
+             exclusions <- _appStateExclusions <$> get
              let filtF = flip elem exclusions . normalise . _fileTreeDataPath . fst
                  src = LR src'
                  trg = RR trg'
              diff <- liftIO $ runEitherT (createDiffTree src trg)
 
-             liftIO $ case diff of
-                         (Left errs) -> putStrLn ("errors during diff tree creation" :: String)
-                         (Right diff') -> syncForests strat src trg (filterForest filtF diff'))
+             case diff of
+                (Left errs) -> do
+                  let errs' = F.toList $ fmap (fromFTD) errs
+                  liftIO $ putStrLn ("There were file/directory-conflicts." :: String)
+                  liftIO $ putStrLn ("The following entries were present as files in one" :: String)
+                  liftIO $ putStrLn ("place and as directories in another:" :: String)
+                  liftIO $ putStrLn ("" :: String)
+                  liftIO $ mapM_ putStrLn errs'
+                  liftIO $ putStrLn ("" :: String)
+                  liftIO $ putStrLn ("Use ':rename' to rename the conflicting files." :: String)
+                  modify (\s -> s{_appStateConflicts = errs', _appStateLastDirs = Just (src', trg')})
+                (Right diff') -> do
+                  liftIO $ syncForests strat src trg (filterForest filtF diff')
+                  clearConflicts)
 
       cmdList :: Cmd
       cmdList = makeCommand
@@ -67,9 +87,41 @@ maim = evalStateT repl []
          ":e[x]clude"
          (defCommandTest [":exclude", ":x"])
          "Sets a list of excluded directories (file format: one filepath per line)."
-         False
+         True
          (existentFileAsker "Enter exlusions file: ")
-         (\_ fp -> liftIO (readFile fp) >$> (map normalise . lines) >>= put)
+         (\_ fp -> do
+            excl <- liftIO (readFile fp) >$> (map normalise . lines)
+            modify (\s -> s{_appStateExclusions=excl}))
+
+      cmdRename :: Cmd
+      cmdRename = makeCommand2
+         ":[r]ename"
+         (defCommandTest [":rename", ":r"])
+         "Renames conflicting files in two directories."
+         True
+         (dirAsker "Enter the first directory: ")
+         (dirAsker "Enter the second directory: ")
+         (\_ src trg -> do
+             let dirs = St.fromList [src, trg]
+             sameDirs <- fromMaybe False
+                         . fmap (\(s,t) -> dirs == St.fromList [s,t])
+                         . _appStateLastDirs
+                         <$> get
+
+             -- If the directories are the same as during the last join attempts,
+             -- we just get the stored conflicts.
+             -- Otherwise, we create a new diff tree.
+             conflicts <-
+                if sameDirs then _appStateConflicts <$> get
+                else do diff <- liftIO $ runEitherT $ createDiffTree (LR src) (RR trg)
+                        return $ either (F.toList . fmap fromFTD) (const []) diff 
+             
+             renamings <- liftIO $ renameConflicts [LR src, LR trg] conflicts
+             liftIO $ mapM_ (\(r, o, n) -> putStrLn $ (r </> o) ++ " renamed to " ++ n) renamings
+             clearConflicts
+         )
+
+
 
       cmdHelp :: Cmd
       cmdHelp = makeCommand
@@ -145,3 +197,7 @@ runSummaryJoin j lr rr fp t = do
    (b,s) <- j lr rr fp t
    performSummaryJoin lr rr s
    return (b, ())
+
+-- |Clears the conflicts and the last dirs fields of the app state.
+clearConflicts :: StateT AppState IO ()
+clearConflicts = modify (\s -> s{_appStateConflicts = [], _appStateLastDirs = Nothing})

@@ -28,7 +28,7 @@ class Eq a => LooseEq a where
 
    -- |Gets the reduct of a value - the fragment which really decides equality in the sense of '=='.
    --  The default implementation is 'id'.
-   reduce :: a -> Reduct a
+   reduct :: a -> Reduct a
 
 -- |Loose comparison of values.
 --
@@ -36,7 +36,7 @@ class Eq a => LooseEq a where
 -- (x =~= y)   ===   (reduct x == reduct y)
 -- @
 (=~=) :: (Eq (Reduct a), LooseEq a) => a -> a -> Bool
-(=~=) x y = reduce x == reduce y
+(=~=) x y = reduct x == reduct y
 
 -- |A collection of equivalence classes, with each class represented by a single element.
 type EqClasses k v = M.Map k (S.Seq v)
@@ -56,7 +56,7 @@ instance Show FileTreeData where
 -- |Loose equality is decided based on '_fileTreeDataPath'.
 instance LooseEq FileTreeData where
    type Reduct FileTreeData = FilePath
-   reduce (FTD fp _) = fp
+   reduct (FTD fp _) = fp
 
 data EntryType = Directory | File
    deriving (Show, Eq, Ord, Read)

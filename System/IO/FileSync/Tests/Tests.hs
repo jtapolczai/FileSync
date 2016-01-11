@@ -31,7 +31,7 @@ data TwoKey = TK String String deriving (Show, Eq, Ord)
 
 instance LooseEq TwoKey where
    type Reduct TwoKey = String
-   reduce (TK s _) = s
+   reduct (TK s _) = s
 
 runTests :: IO ()
 runTests = hspec . fromHUnitTest $ tests

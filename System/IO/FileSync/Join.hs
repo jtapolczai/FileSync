@@ -40,7 +40,7 @@ genericJoin ss ts =
 
             f acc val =
                M.insertWith (\_ old -> old S.|> val)
-                            (reduce . T.rootLabel . fst $ val)
+                            (reduct . T.rootLabel . fst $ val)
                             (S.singleton val)
                             acc
 

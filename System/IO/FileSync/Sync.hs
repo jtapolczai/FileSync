@@ -13,6 +13,7 @@ import qualified Data.Foldable as F
 import Data.Functor.Monadic
 import qualified Data.Sequence as S
 import qualified Data.Tree as T
+import qualified Data.Tree.Monadic as Mt
 import System.Directory
 import System.FilePath
 
@@ -26,20 +27,20 @@ import System.IO.FileSync.Types
 createFileTree
    :: FileRoot src
    => src
-   -> IO (T.Forest FileTreeData)
-createFileTree src = T.subForest <$> go "" (getFilePath src)
+   -> IO [Mt.MTree IO FileTreeData]
+createFileTree src = Mt.subForest $ go "" (getFilePath src)
    where
-      go root this =  do
+      go root this = Mt.MTree $ do
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
          thisIsFile <- doesFileExist this
-         if thisIsFile then return $ T.Node (FTD this File) [T.Node (FTD (takeFileName this) File) []]
+         if thisIsFile then return (FTD this File, [Mt.MTree $ return (FTD (takeFileName this) File, [])])
          else do
             contents <- getDirectoryContents (root </> this)
             (files, dirs) <- partition fst <$> mapM isFile contents
-            let files' = map (\(_,x) -> T.Node (FTD x File) []) files
+            let files' = map (\(_,x) -> Mt.MTree $ return (FTD x File, [])) files
                 dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs
-            children <- mapM (go $ root </> this) dirs'
-            return $ T.Node (FTD this Directory) $ files' ++ children
+                children = map (go $ root </> this) dirs'
+            return (FTD this Directory, files' ++ children)
 
 -- |Creates a difference tree between two directories.
 --  The roots themselves will not be included in the resultant tree,
@@ -52,7 +53,8 @@ createDiffTree
    -> RightRoot
    -> EitherT (S.Seq FileDirectoryConflict) IO (T.Forest (FileTreeData, TreeDiff))
 createDiffTree src trg = do
-   forest <- lift $ genericJoin <$> createFileTree src <*> createFileTree trg
+   let mat = (>>= mapM Mt.materialize)
+   forest <- lift $ genericJoin <$> mat (createFileTree src) <*> mat (createFileTree trg)
    let (cleanedForest, errors) = runWriter $ reforest recordKeyConflicts forest
        mkError xs =
           FileDirectoryConflict (_fileTreeDataPath . head . F.toList $ xs)

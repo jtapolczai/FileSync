@@ -1,9 +1,13 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections #-}
 
 module Data.Tree.Monadic (
    MTree(..),
+   nodeLabel,
+   subForest,
+   mapMTree,
    -- * Running trees
    --   These functions traverse MTrees and return pure rose trees.
    --   Their drawback is that they keep the entire tree in memory.
@@ -18,11 +22,7 @@ module Data.Tree.Monadic (
    traverseM,
    ) where
 
-import Control.Concurrent.STM.Utils
-import Control.Monad as C
-import Data.Collections.Instances()
-import Data.Functor.FunctorM
-import Data.Tree as T
+import qualified Data.Tree as T
 
 -- |A monadic rose tree in which the child nodes are wrapped in a monad.
 --  @l@ is the type of the keys in the leaf nodes and @n@ the type
@@ -34,10 +34,20 @@ data MTree m n = -- |An internal nodes with a value and children
 instance (Functor m) => Functor (MTree m) where
    fmap f (MTree m) = MTree $ fmap (\(x,xs) -> (f x, map (fmap f) xs)) m
 
-instance (Functor m, Monad m) => FunctorM (MTree m) m where
-   fmapM f (MTree m) = return $ MTree $ do
-      (x,xs) <- m
-      liftM2 (,) (f x) (mapM (fmapM f) xs)
+-- |Gets the node label of an MTree.
+nodeLabel :: Functor m => MTree m n -> m n
+nodeLabel (MTree m) = fmap fst m
+
+-- |Gets the children of an MTree.
+subForest :: Functor m => MTree m n -> m [MTree m n]
+subForest (MTree m) = fmap snd m
+
+-- |Maps every element of a structure to a monadic value and collects
+--  the results while preserving the original structure.
+mapMTree :: Monad m => (a -> m b) -> MTree m a -> MTree m b
+mapMTree f (MTree m) = MTree $ do
+   (x,xs) <- m
+   (, map (mapMTree f) xs) <$> f x
 
 -- |Completely unrolls an 'MTree' into a 'Tree' __depth-first__,
 --  evaluating all nodes.
@@ -45,7 +55,7 @@ instance (Functor m, Monad m) => FunctorM (MTree m) m where
 --  The time is @O(n)@ where @n@ is the number of nodes.
 --  The space is @O(n)@ if the result is kept and @O(d)@ if it isn't,
 --  with @d@ being the maximal depth of the tree.
-materialize :: Monad m => MTree m n -> m (Tree n)
+materialize :: Monad m => MTree m n -> m (T.Tree n)
 materialize (MTree m) = do
    (v, children) <- m
    children' <- mapM materialize children
@@ -64,6 +74,8 @@ materialize (MTree m) = do
 --
 --  Note that a node's children may be rearranged, depending
 --  on the order in which their processing finishes.
+materializePar = undefined
+{-
 materializePar :: TaskLimit
                   -- ^The upper limit on simultaneous tasks.
                   --  For @n=1@, 'materializePar' behaves identically to
@@ -75,7 +87,7 @@ materializePar :: TaskLimit
 materializePar numTasks (MTree m) = do
    (v, children) <- withTaskLimit numTasks m
    results <- parMapSTM (materializePar numTasks) children
-   return $ Node v results
+   return $ Node v results -}
 
 -- |Unfolds an 'MTree' from a monadic value.
 --  Analogous to 'Data.Tree.unfoldTreeM'
@@ -89,8 +101,8 @@ leaves :: (s -> n -> a) -- ^Result calculator, applied to the leaves.
        -> s -- ^Initial state.
        -> T.Tree n
        -> [a]
-leaves f _ seed (Node n []) = [f seed n]
-leaves f g seed (Node n xs) = concatMap (leaves f g (g seed n)) xs
+leaves f _ seed (T.Node n []) = [f seed n]
+leaves f g seed (T.Node n xs) = concatMap (leaves f g (g seed n)) xs
 
 traverseM :: Monad m
           => (s -> n -> m (s,a))

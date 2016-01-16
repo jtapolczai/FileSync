@@ -1,12 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TupleSections #-}
-
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 module System.IO.FileSync.Sync where
 
 import Control.Monad.Trans.Either
 import Control.Monad.Writer
+import qualified Data.Conduit as Con
 import Data.List
 import Data.Ord
 import qualified Data.Foldable as F
@@ -66,40 +67,38 @@ createDiffTree src trg = do
 --  using a given strategy. The tree's root should be an immediate child of
 --  either the source or the target.
 syncTrees
-   :: (Monoid b)
-   => JoinStrategy b
+   :: JoinStrategy b
    -> LeftRoot
    -> RightRoot
    -> T.Tree (FileTreeData, TreeDiff)
-   -> IO b
+   -> Con.Source IO b
 syncTrees strategy src trg = go ""
    where
+      throughput [] = return Yes
+      throughput (Right x:xs) = Con.yield x >> throughput xs
+      throughput (Left x:_) = return x
+
       go path node@(T.Node (FTD x _,_) xs) = do
-         (continue, res) <- strategy src trg path node
-         if continue then mappend res <$> mconcat <$> mapM (go $ path </> x) xs
-                     else return res
+         continue <- liftIO (Con.sourceToList (strategy src trg path node)) >>= throughput
+         when (continue == Yes) $ mapM_ (go $ path </> x) xs
 
 -- |See 'syncTrees'. Works with forests.
 syncForests
-   :: (Monoid b)
-   => JoinStrategy b
+   :: JoinStrategy b
    -> LeftRoot
    -> RightRoot
    -> T.Forest (FileTreeData, TreeDiff)
-   -> IO b
-syncForests strategy src trg = mapM (syncTrees strategy src trg) >=$> mconcat
+   -> Con.Source IO b
+syncForests strategy src trg = mapM_ (syncTrees strategy src trg)
 
 -- |Takes two directories and synchronizes them using a given join
 --  strategy. Everything said about 'syncTrees' applies.
 syncDirectories
-   :: Monoid b
-   => JoinStrategy b
+   :: JoinStrategy b
    -> LeftRoot
    -> RightRoot
-   -> EitherT (S.Seq FileDirectoryConflict) IO b
-syncDirectories strategy src trg =
-   createDiffTree src trg
-   >>= lift . syncForests strategy src trg
+   -> EitherT (S.Seq FileDirectoryConflict) IO (Con.Source IO b)
+syncDirectories strategy src trg = syncForests strategy src trg <$> createDiffTree src trg
 
 -- |Recursively sorts a forest according to the keys.
 sortForest :: Ord a => T.Forest a -> T.Forest a

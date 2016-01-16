@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -7,6 +8,7 @@ module System.IO.FileSync.Types where
 
 import Control.Exception
 import Data.Char
+import qualified Data.Conduit as Con
 import qualified Data.Map as M
 import qualified Data.Sequence as S
 import qualified Data.Tree as T
@@ -73,12 +75,15 @@ class FileRoot a where
 instance FileRoot LeftRoot where getFilePath (LR fp) = fp
 instance FileRoot RightRoot where getFilePath (RR fp) = fp
 
+-- |A function which takes a part of a difference tree and returns a stream of file actions
+--  which should be taken. The last returned value should be the Continue-field. If True,
+--  the join will proceed down the subtrees. If not, it terminates for the given tree.
 type JoinStrategy a =
    LeftRoot
    -> RightRoot
    -> FilePath
    -> T.Tree (FileTreeData, TreeDiff)
-   -> IO (Continue, a)
+   -> Con.Producer IO (Either Continue a)
 
 type DifferenceHandler = FilePath -> IO (Maybe FileAction)
 

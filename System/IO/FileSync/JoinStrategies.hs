@@ -27,6 +27,8 @@ module System.IO.FileSync.JoinStrategies (
    overwriteWithRight,
    ) where
 
+import Control.Monad.IO.Class (liftIO)
+import qualified Data.Conduit as Con
 import Data.Maybe
 import qualified Data.Sequence as S
 import qualified Data.Text as T
@@ -51,34 +53,34 @@ pattern JNode fp side <- Tr.Node (FTD fp _, side) _
 -- |Left join. Performs all copying/deletions immediately.
 simpleLeftJoin :: JoinStrategy ()
 simpleLeftJoin left right path (JNode fp LeftOnly) =
-   applyInsertAction left right (path </> fp) >> return (False, ())
+   liftIO (applyInsertAction left right (path </> fp)) >> Con.yield (Left No)
 simpleLeftJoin _ right path (JNode fp RightOnly) =
-   applyDeleteAction right (path </> fp) >> return (False, ())
-simpleLeftJoin _ _ _ _ = return (True, ())
+   liftIO (applyDeleteAction right (path </> fp)) >> Con.yield (Left No)
+simpleLeftJoin _ _ _ _ = Con.yield (Left Yes)
 
 -- |Right join. Performs all copying/deletions immediately.
 simpleRightJoin :: JoinStrategy ()
 simpleRightJoin left _ path (JNode fp LeftOnly) =
-   applyDeleteAction left (path </> fp) >> return (False, ())
+   liftIO (applyDeleteAction left (path </> fp)) >> Con.yield (Left No)
 simpleRightJoin left right path (JNode fp RightOnly) =
-   applyInsertAction right left (path </> fp) >> return (False, ())
-simpleRightJoin _ _ _ _ = return (True, ())
+   liftIO (applyInsertAction right left (path </> fp)) >> Con.yield (Left No)
+simpleRightJoin _ _ _ _ = Con.yield (Left Yes)
 
 -- |Inner join. Performs all copying/deletions immediately.
 simpleInnerJoin :: JoinStrategy ()
 simpleInnerJoin left _ path (JNode fp LeftOnly) =
-   applyDeleteAction left (path </> fp) >> return (False, ())
+   liftIO (applyDeleteAction left (path </> fp)) >> Con.yield (Left No)
 simpleInnerJoin _ right path (JNode fp RightOnly) =
-   applyDeleteAction right (path </> fp) >> return (False, ())
-simpleInnerJoin _ _ _ _ = return (True, ())
+   liftIO (applyDeleteAction right (path </> fp)) >> Con.yield (Left No)
+simpleInnerJoin _ _ _ _ = Con.yield (Left Yes)
 
 -- |Full outer join. Performs all copying/deletions immediately.
 simpleOuterJoin :: JoinStrategy ()
 simpleOuterJoin left right path (JNode fp LeftOnly) =
-   applyInsertAction left right (path </> fp) >> return (False, ())
+   liftIO (applyInsertAction left right (path </> fp)) >> Con.yield (Left No)
 simpleOuterJoin left right path (JNode fp RightOnly) =
-   applyInsertAction right left (path </> fp) >> return (False, ())
-simpleOuterJoin _ _ _ _ = return (True, ())
+   liftIO (applyInsertAction right left (path </> fp)) >> Con.yield (Left No)
+simpleOuterJoin _ _ _ _ = Con.yield (Left Yes)
 
 -- Summary joins
 -------------------------------------------------------------------------------
@@ -92,33 +94,35 @@ summaryJoin
    :: DifferenceHandler -- ^Action for "left only" parts.
    -> DifferenceHandler -- ^Action for "right only" parts.
    -> DifferenceHandler -- ^Action for parts present in both trees.
-   -> JoinStrategy (S.Seq FileAction)
+   -> JoinStrategy FileAction
 summaryJoin lA rA bA _ _ path (JNode fp diff) = do
    let handler = case diff of {LeftOnly -> lA; RightOnly -> rA; Both -> bA}
-   act <- handler (path </> fp)
-   return (isNothing act, maybe S.empty S.singleton act)
+   act <- liftIO $ handler (path </> fp)
+   case act of
+      Nothing -> Con.yield (Left Yes)
+      Just act' -> Con.yield (Right act') >> Con.yield (Left No)
 summaryJoin _ _ _ _ _ _ _ = error "summaryJoin: pattern match failure. This should never happen."
 
 -- |Left join. See 'summaryJoin'.
-summaryLeftJoin :: JoinStrategy (S.Seq FileAction)
+summaryLeftJoin :: JoinStrategy FileAction
 summaryLeftJoin = summaryJoin (return . Just . Copy LeftSide)
                               (return . Just . Delete RightSide)
                               (const $ return Nothing)
 
 -- |Right join. See 'summaryJoin'.
-summaryRightJoin :: JoinStrategy (S.Seq FileAction)
+summaryRightJoin :: JoinStrategy FileAction
 summaryRightJoin = summaryJoin (return . Just . Delete LeftSide)
                                (return . Just . Copy RightSide)
                                (const $ return Nothing)
 
 -- |Inner join. See 'summaryJoin'.
-summaryInnerJoin :: JoinStrategy (S.Seq FileAction)
+summaryInnerJoin :: JoinStrategy FileAction
 summaryInnerJoin = summaryJoin (return . Just . Delete LeftSide)
                                (return . Just . Delete RightSide)
                                (const $ return Nothing)
 
 -- |Full outer join. See 'summaryJoin'.
-summaryOuterJoin :: JoinStrategy (S.Seq FileAction)
+summaryOuterJoin :: JoinStrategy FileAction
 summaryOuterJoin = summaryJoin (return . Just . Copy LeftSide)
                                (return . Just . Copy RightSide)
                                (const $ return Nothing)

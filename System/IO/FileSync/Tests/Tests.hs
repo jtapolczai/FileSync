@@ -69,6 +69,8 @@ tests = TestList
     TestLabel "summaryJoinI3_modTime_identical" $ TestCase summaryJoinI3_modTime_identical,
     TestLabel "summaryJoinI4_size_larger" $ TestCase summaryJoinI4_size_larger,
     TestLabel "summaryJoinI5_size_identical" $ TestCase summaryJoinI5_size_identical,
+    TestLabel "summaryJoinI6_overwriteWithLeft" $ TestCase summaryJoinI6_overwriteWithLeft,
+    TestLabel "summaryJoinI7_overwriteWithRight" $ TestCase summaryJoinI7_overwriteWithRight,
     TestLabel "getFileSize1" $ TestCase getFileSize1
     ]
 
@@ -347,6 +349,36 @@ summaryJoinI5_size_identical = summaryJoin_template
    (Just (--"both" should remain unchanged in both branches
           assertContent "bothL" "testDir/dir1/both/both.txt"
           >> assertContent "bothR" "testDir/dir2/both/both.txt"))
+
+summaryJoinI6_overwriteWithLeft :: Assertion
+summaryJoinI6_overwriteWithLeft = summaryJoin_template
+   (flip elem [Both])
+   (summaryJoin (return . Just . Delete LeftSide)
+                (return . Just . Delete RightSide)
+                (overwriteWithLeft lr))
+   Nothing
+   (Just (--the left version should be present in both branches
+          assertContent "bothL" "testDir/dir1/both/both.txt"
+          >> assertContent "bothL" "testDir/dir2/both/both.txt"
+          >> assertContent "both2_left larger" "testDir/dir2/both/both1/both2.txt"
+          >> assertContent "both2_left larger" "testDir/dir2/both/both1/both2.txt"
+          >> assertContent "both3_left" "testDir/dir1/both/both1/both3.txt"
+          >> assertContent "both3_left" "testDir/dir2/both/both1/both3.txt"))
+
+summaryJoinI7_overwriteWithRight :: Assertion
+summaryJoinI7_overwriteWithRight = summaryJoin_template
+   (flip elem [Both])
+   (summaryJoin (return . Just . Delete LeftSide)
+                (return . Just . Delete RightSide)
+                (overwriteWithRight rr))
+   Nothing
+   (Just (--the left version should be present in both branches
+          assertContent "bothR" "testDir/dir1/both/both.txt"
+          >> assertContent "bothR" "testDir/dir2/both/both.txt"
+          >> assertContent "both2_right" "testDir/dir2/both/both1/both2.txt"
+          >> assertContent "both2_right" "testDir/dir2/both/both1/both2.txt"
+          >> assertContent "both3_right larger" "testDir/dir1/both/both1/both3.txt"
+          >> assertContent "both3_right larger" "testDir/dir2/both/both1/both3.txt"))
 
 -- Get file size
 -------------------------------------------------------------------------------

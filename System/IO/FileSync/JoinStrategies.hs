@@ -23,6 +23,8 @@ module System.IO.FileSync.JoinStrategies (
    -- ** Handlers for summary joins.
    overwriteWithNewer,
    overwriteWithLarger,
+   overwriteWithLeft,
+   overwriteWithRight,
    ) where
 
 import Data.Maybe
@@ -201,15 +203,30 @@ overwriteWithNewer (LR lr) (RR rr) fp = let
 --  * Both entries have the same size.
 --
 --  Does not handle exceptions besides 'InappropriateType' and 'PermissionError'.
-overwriteWithLarger :: LeftRoot
-                   -> RightRoot
-                   -> DifferenceHandler
+overwriteWithLarger 
+   :: LeftRoot
+   -> RightRoot
+   -> DifferenceHandler
 overwriteWithLarger (LR lr) (RR rr) fp = do 
    lT <- handleIOErrors [isPermissionError, isInappropriateTypeError] $ getFileSize (lr </> fp)
    rT <- handleIOErrors [isPermissionError, isInappropriateTypeError] $ getFileSize (rr </> fp)
    return $ if lT > rT then Just (Copy LeftSide fp)
             else if lT < rT then Just (Copy RightSide fp)
             else Nothing
+
+-- |If the path refers to a file, this function overwrites the right file with the left one.
+--  Does nothing if the path refers to a directory.
+overwriteWithLeft :: LeftRoot -> DifferenceHandler
+overwriteWithLeft (LR root) fp = do
+   isFile <- doesFileExist (root </> fp)
+   return $ if isFile then Just $ Copy LeftSide fp else Nothing
+
+-- |If the path refers to a file, this function overwrites the left file with the right one.
+--  Does nothing if the path refers to a directory.
+overwriteWithRight :: RightRoot -> DifferenceHandler
+overwriteWithRight (RR root) fp = do
+   isFile <- doesFileExist (root </> fp)
+   return $ if isFile then Just $ Copy RightSide fp else Nothing
 
 -- Utility functions
 -------------------------------------------------------------------------------

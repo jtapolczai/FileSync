@@ -78,7 +78,7 @@ type JoinStrategy a =
    -> RightRoot
    -> FilePath
    -> T.Tree (FileTreeData, TreeDiff)
-   -> IO (Bool, a)
+   -> IO (Continue, a)
 
 type DifferenceHandler = FilePath -> IO (Maybe FileAction)
 
@@ -87,6 +87,8 @@ data RootSide = LeftSide | RightSide
 
 data FileAction = Delete RootSide FilePath | Copy RootSide FilePath
    deriving (Show, Eq, Ord, Read)
+
+type Continue = YesNo
 
 data YesNo = Yes | No
    deriving (Show, Eq, Ord, Enum, Bounded)

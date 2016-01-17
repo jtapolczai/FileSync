@@ -5,15 +5,17 @@ module System.IO.FileSync.Tests.Tests where
 import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Either
+import qualified Data.Conduit as Con
 import Data.Either
 import Data.Foldable (toList)
 import qualified Data.Map as M
 import Data.Maybe
-import qualified Data.Sequence as S
 import qualified Data.Set as St
 import Data.Time.Calendar
 import Data.Time.Clock
 import qualified Data.Tree as Tr
+import qualified Data.Tree.Monadic as Mt
+import Data.Void
 import System.Directory
 import System.IO
 import System.FilePath
@@ -81,14 +83,14 @@ createEmptyFileTree :: Assertion
 createEmptyFileTree = bracket'
    (mkD "testDir/empty")
    (rmD "testDir")
-   (do t <- createFileTree (LR "testDir/empty")
+   (do t <- createFileTree (LR "testDir/empty") >>= mapM Mt.materialize
        assertEqual "empty file tree" [] t)
 
 createFileTree1 :: Assertion
 createFileTree1 = bracket'
    testDirsL
    (rmD "testDir")
-   (do t <- createFileTree lr
+   (do t <- createFileTree lr >>= mapM Mt.materialize
        putStrLn "Expected forest:"
        putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1 
        putStrLn "Actual forest:"
@@ -99,7 +101,7 @@ createFileTree2 :: Assertion
 createFileTree2 = bracket'
    testDirsL
    (rmD "testDir")
-   (do t <- createFileTree (LR "testDir/dir1/both/both.txt")
+   (do t <- createFileTree (LR "testDir/dir1/both/both.txt") >>= mapM Mt.materialize
        assertEqual "file tree 2" t [Tr.Node (FTD "both.txt" File) []])
 
 -- Create diff tree
@@ -176,7 +178,7 @@ filterTree3 = assertEqual "all keys >10 filtered out" (filterForest (<=10) [tr1]
 -------------------------------------------------------------------------------
 
 simpleJoin_template :: (TreeDiff -> Bool)
-                    -> JoinStrategy ()
+                    -> JoinStrategy Void
                     -> Assertion
 simpleJoin_template okElems strategy = bracket'
    (testDirsL >> testDirsR)
@@ -186,8 +188,8 @@ simpleJoin_template okElems strategy = bracket'
        let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> createFileTree lr
-       ft2 <- sortForest <$> createFileTree rr
+       ft1 <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
+       ft2 <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
        assertBool "directories match after join" $ ft1 == ft2)
 
 simpleJoinL1 :: Assertion
@@ -205,17 +207,17 @@ simpleJoinI1 = simpleJoin_template (flip elem [Both]) simpleInnerJoin
 -- Summary join
 -------------------------------------------------------------------------------
 
-summaryJoin_noChange_template :: (JoinStrategy (S.Seq FileAction))
+summaryJoin_noChange_template :: (JoinStrategy FileAction)
                       -> Assertion
 summaryJoin_noChange_template joinStrategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do ftInitL <- sortForest <$> createFileTree lr
-       ftInitR <- sortForest <$> createFileTree rr
+   (do ftInitL <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
+       ftInitR <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
        res <- runEitherT $ syncDirectories joinStrategy lr rr
        assertBool "synDirectories must be successful" (isRight res)
-       ftOutL <- sortForest <$> createFileTree lr
-       ftOutR <- sortForest <$> createFileTree rr
+       ftOutL <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
+       ftOutR <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
        assertBool "left directory didn't change without join" $ ftInitL == ftOutL
        assertBool "right directory didn't change without join" $ ftInitR == ftOutR)
 
@@ -232,7 +234,7 @@ summaryJoinI_noChange :: Assertion
 summaryJoinI_noChange = summaryJoin_noChange_template summaryInnerJoin
 
 summaryJoin_template :: (TreeDiff -> Bool)
-                     -> (JoinStrategy (S.Seq FileAction))
+                     -> (JoinStrategy FileAction)
                      -> Maybe [FileAction] -- ^Expected list of generated 'FileAction's.
                      -> Maybe Assertion -- ^Additional, optional assertion at the end.
                      -> Assertion
@@ -241,7 +243,7 @@ summaryJoin_template okElems strategy expectedActions ass = bracket'
    (rmD "testDir")
    (do actions' <- runEitherT $ syncDirectories strategy lr rr
        assertBool "synDirectories must be successful" (isRight actions')
-       let actions = fromRight actions'
+       actions <- Con.sourceToList $ fromRight actions'
        maybe (return ())
              (\ea -> assertEqual "list of FileActions" 
                                  (St.fromList ea) 
@@ -251,8 +253,8 @@ summaryJoin_template okElems strategy expectedActions ass = bracket'
        let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> createFileTree lr
-       ft2 <- sortForest <$> createFileTree rr
+       ft1 <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
+       ft2 <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
        assertBool "directories match after join" $ ft1 == ft2
        fromMaybe (return ()) ass)
 

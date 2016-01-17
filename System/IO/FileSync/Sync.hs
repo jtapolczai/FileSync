@@ -11,7 +11,6 @@ import qualified Data.Conduit as Con
 import Data.List
 import Data.Ord
 import qualified Data.Foldable as F
-import Data.Functor.Monadic
 import qualified Data.Sequence as S
 import qualified Data.Tree as T
 import qualified Data.Tree.Monadic as Mt

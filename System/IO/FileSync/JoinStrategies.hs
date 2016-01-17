@@ -29,10 +29,10 @@ module System.IO.FileSync.JoinStrategies (
 
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Conduit as Con
-import Data.Maybe
-import qualified Data.Sequence as S
+import qualified Data.Conduit.List as ConL
 import qualified Data.Text as T
 import qualified Data.Tree as Tr
+import Data.Void
 import System.FilePath
 import System.IO.Error
 import System.REPL
@@ -51,7 +51,7 @@ pattern JNode fp side <- Tr.Node (FTD fp _, side) _
 -------------------------------------------------------------------------------
 
 -- |Left join. Performs all copying/deletions immediately.
-simpleLeftJoin :: JoinStrategy ()
+simpleLeftJoin :: JoinStrategy Void
 simpleLeftJoin left right path (JNode fp LeftOnly) =
    liftIO (applyInsertAction left right (path </> fp)) >> Con.yield (Left No)
 simpleLeftJoin _ right path (JNode fp RightOnly) =
@@ -59,7 +59,7 @@ simpleLeftJoin _ right path (JNode fp RightOnly) =
 simpleLeftJoin _ _ _ _ = Con.yield (Left Yes)
 
 -- |Right join. Performs all copying/deletions immediately.
-simpleRightJoin :: JoinStrategy ()
+simpleRightJoin :: JoinStrategy Void
 simpleRightJoin left _ path (JNode fp LeftOnly) =
    liftIO (applyDeleteAction left (path </> fp)) >> Con.yield (Left No)
 simpleRightJoin left right path (JNode fp RightOnly) =
@@ -67,7 +67,7 @@ simpleRightJoin left right path (JNode fp RightOnly) =
 simpleRightJoin _ _ _ _ = Con.yield (Left Yes)
 
 -- |Inner join. Performs all copying/deletions immediately.
-simpleInnerJoin :: JoinStrategy ()
+simpleInnerJoin :: JoinStrategy Void
 simpleInnerJoin left _ path (JNode fp LeftOnly) =
    liftIO (applyDeleteAction left (path </> fp)) >> Con.yield (Left No)
 simpleInnerJoin _ right path (JNode fp RightOnly) =
@@ -75,7 +75,7 @@ simpleInnerJoin _ right path (JNode fp RightOnly) =
 simpleInnerJoin _ _ _ _ = Con.yield (Left Yes)
 
 -- |Full outer join. Performs all copying/deletions immediately.
-simpleOuterJoin :: JoinStrategy ()
+simpleOuterJoin :: JoinStrategy Void
 simpleOuterJoin left right path (JNode fp LeftOnly) =
    liftIO (applyInsertAction left right (path </> fp)) >> Con.yield (Left No)
 simpleOuterJoin left right path (JNode fp RightOnly) =
@@ -129,17 +129,18 @@ summaryOuterJoin = summaryJoin (return . Just . Copy LeftSide)
 
 -- |Takes a list of actions and runs them after asking the user
 --  for confirmation. Iff the user cancels, the function returns 'False'.
-performSummaryJoin :: LeftRoot -> RightRoot -> S.Seq FileAction -> IO Bool
-performSummaryJoin left right actions = do
-   putStrLn "You are about to perform the following operations:"
-   putStrLn $ "Left directory: " ++ getFilePath left
-   putStrLn $ "Right directory: " ++ getFilePath right
-   mapM (putStrLn . showFileAction) actions
-   putStrLn "Are you SURE (y/n)?"
+performSummaryJoin :: LeftRoot -> RightRoot -> Con.Sink FileAction IO Bool
+performSummaryJoin left right = do
+   liftIO $ putStrLn "You are about to perform the following operations:"
+   liftIO $ putStrLn $ "Left directory: " ++ getFilePath left
+   liftIO $ putStrLn $ "Right directory: " ++ getFilePath right
+   actions <- ConL.consume
+   liftIO $ mapM (putStrLn . showFileAction) actions
+   liftIO $ putStrLn "Are you SURE (y/n)?"
    (answer :: YesNo) <- ask' yesNoAsker
    case answer of
-      Yes -> mapM (performFileAction left right) actions >> return True
-      No -> putStrLn "Doing nothing." >> return False
+      Yes -> liftIO (mapM (performFileAction left right) actions) >> return True
+      No -> liftIO (putStrLn "Doing nothing.") >> return False
 
 yesNoAsker :: Monad m => Asker m T.Text YesNo
 yesNoAsker = predAsker
@@ -147,7 +148,6 @@ yesNoAsker = predAsker
    (\t -> return $ if elem (T.strip t) ["y","Y"] then Right Yes
                    else if elem (T.strip t) ["n","N"] then Right No
                    else Left $ genericPredicateError "Expected y/n.")
-
 
 -- |Shows a 'FileAction' as a short line.
 --  The path is printed, along with a code:

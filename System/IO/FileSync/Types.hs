@@ -83,7 +83,7 @@ type JoinStrategy a =
    -> RightRoot
    -> FilePath
    -> T.Tree (FileTreeData, TreeDiff)
-   -> Con.Producer IO (Either Continue a)
+   -> Con.Source IO (Either Continue a)
 
 type DifferenceHandler = FilePath -> IO (Maybe FileAction)
 

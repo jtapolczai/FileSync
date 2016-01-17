@@ -185,11 +185,18 @@ simpleJoin_template okElems strategy = bracket'
    (rmD "testDir")
    (do res <- runEitherT $ syncDirectories strategy lr rr
        assertBool "synDirectories must be successful" (isRight res)
+       Con.runConduit $ fromRight res
        let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
        ft1 <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
        ft2 <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
+
+       putStrLn "Left forest:"
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1
+       putStrLn "Right forest:"
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft2
+
        assertBool "directories match after join" $ ft1 == ft2)
 
 simpleJoinL1 :: Assertion
@@ -207,8 +214,7 @@ simpleJoinI1 = simpleJoin_template (flip elem [Both]) simpleInnerJoin
 -- Summary join
 -------------------------------------------------------------------------------
 
-summaryJoin_noChange_template :: (JoinStrategy FileAction)
-                      -> Assertion
+summaryJoin_noChange_template :: (JoinStrategy FileAction) -> Assertion
 summaryJoin_noChange_template joinStrategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
@@ -216,6 +222,7 @@ summaryJoin_noChange_template joinStrategy = bracket'
        ftInitR <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
        res <- runEitherT $ syncDirectories joinStrategy lr rr
        assertBool "synDirectories must be successful" (isRight res)
+       Con.sourceToList $ fromRight res
        ftOutL <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
        ftOutR <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
        assertBool "left directory didn't change without join" $ ftInitL == ftOutL

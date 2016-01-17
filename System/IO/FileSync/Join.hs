@@ -16,8 +16,6 @@ import qualified Data.Tree as T
 
 import System.IO.FileSync.Types
 
-import Debug.Trace
-
 -- |Generic join that computer the set of differences between two forests.
 --  Ordering of subtrees is __not__ guaranteed. Subtrees with identical
 --  roots (according to '==') are merged.
@@ -34,10 +32,8 @@ genericJoin ss ts =
 
       groupChildren :: [(T.Tree a, TreeDiff)]
                     -> EqClasses (Reduct a) (T.Tree a, TreeDiff)
-      groupChildren xs = trace "[groupChildren]" $ traceShow ret $ ret
+      groupChildren xs = foldl' f M.empty xs
          where
-            ret = foldl' f M.empty xs
-
             f acc val =
                M.insertWith (\_ old -> old S.|> val)
                             (reduct . T.rootLabel . fst $ val)

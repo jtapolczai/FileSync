@@ -33,17 +33,13 @@ import qualified Data.Conduit.List as ConL
 import qualified Data.Text as T
 import qualified Data.Tree as Tr
 import Data.Void
+import System.Directory
 import System.FilePath
 import System.IO.Error
 import System.REPL
 
 import System.IO.FileSync.Types
 import System.IO.FileSync.IO
-
--- |Uncomment this line to mock writing IO functions.
--- import System.IO.Mock
--- |Uncomment this line to use real writing IO functions.
-import System.Directory
 
 pattern JNode fp side <- Tr.Node (FTD fp _, side) _
 

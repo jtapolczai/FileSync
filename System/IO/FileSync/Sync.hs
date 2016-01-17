@@ -92,6 +92,9 @@ syncForests strategy src trg = mapM_ (syncTrees strategy src trg)
 
 -- |Takes two directories and synchronizes them using a given join
 --  strategy. Everything said about 'syncTrees' applies.
+--
+--  The synchronization will only be performed if you read out the results (e.g.
+--  via 'Data.Conduit.runConduit' or 'Data.Conduit.sourceToList').
 syncDirectories
    :: JoinStrategy b
    -> LeftRoot

@@ -5,11 +5,6 @@
 {-# LANGUAGE TupleSections #-}
 
 module System.IO.FileSync.JoinStrategies (
-   -- * Simple joins
-   simpleLeftJoin,
-   simpleRightJoin,
-   simpleInnerJoin,
-   simpleOuterJoin,
    -- * Summary joins
    summaryJoin,
    summaryLeftJoin,
@@ -18,6 +13,7 @@ module System.IO.FileSync.JoinStrategies (
    summaryOuterJoin,
    -- ** Utility functions for summary joins
    performFileAction,
+   askSummaryJoin,
    performSummaryJoin,
    showFileAction,
    -- ** Handlers for summary joins.
@@ -27,12 +23,12 @@ module System.IO.FileSync.JoinStrategies (
    overwriteWithRight,
    ) where
 
+import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Conduit as Con
 import qualified Data.Conduit.List as ConL
 import qualified Data.Text as T
 import qualified Data.Tree as Tr
-import Data.Void
 import System.Directory
 import System.FilePath
 import System.IO.Error
@@ -41,42 +37,9 @@ import System.REPL
 import System.IO.FileSync.Types
 import System.IO.FileSync.IO
 
+-- import Debug.Trace
+
 pattern JNode fp side <- Tr.Node (FTD fp _, side) _
-
--- Simple joins
--------------------------------------------------------------------------------
-
--- |Left join. Performs all copying/deletions immediately.
-simpleLeftJoin :: JoinStrategy Void
-simpleLeftJoin left right path (JNode fp LeftOnly) =
-   liftIO (applyInsertAction left right (path </> fp)) >> Con.yield (Left No)
-simpleLeftJoin _ right path (JNode fp RightOnly) =
-   liftIO (applyDeleteAction right (path </> fp)) >> Con.yield (Left No)
-simpleLeftJoin _ _ _ _ = Con.yield (Left Yes)
-
--- |Right join. Performs all copying/deletions immediately.
-simpleRightJoin :: JoinStrategy Void
-simpleRightJoin left _ path (JNode fp LeftOnly) =
-   liftIO (applyDeleteAction left (path </> fp)) >> Con.yield (Left No)
-simpleRightJoin left right path (JNode fp RightOnly) =
-   liftIO (applyInsertAction right left (path </> fp)) >> Con.yield (Left No)
-simpleRightJoin _ _ _ _ = Con.yield (Left Yes)
-
--- |Inner join. Performs all copying/deletions immediately.
-simpleInnerJoin :: JoinStrategy Void
-simpleInnerJoin left _ path (JNode fp LeftOnly) =
-   liftIO (applyDeleteAction left (path </> fp)) >> Con.yield (Left No)
-simpleInnerJoin _ right path (JNode fp RightOnly) =
-   liftIO (applyDeleteAction right (path </> fp)) >> Con.yield (Left No)
-simpleInnerJoin _ _ _ _ = Con.yield (Left Yes)
-
--- |Full outer join. Performs all copying/deletions immediately.
-simpleOuterJoin :: JoinStrategy Void
-simpleOuterJoin left right path (JNode fp LeftOnly) =
-   liftIO (applyInsertAction left right (path </> fp)) >> Con.yield (Left No)
-simpleOuterJoin left right path (JNode fp RightOnly) =
-   liftIO (applyInsertAction right left (path </> fp)) >> Con.yield (Left No)
-simpleOuterJoin _ _ _ _ = Con.yield (Left Yes)
 
 -- Summary joins
 -------------------------------------------------------------------------------
@@ -92,11 +55,13 @@ summaryJoin
    -> DifferenceHandler -- ^Action for parts present in both trees.
    -> JoinStrategy FileAction
 summaryJoin lA rA bA _ _ path (JNode fp diff) = do
+   {- traceM $ "[summaryJoin] node: " ++ fp ++ " | " ++ show diff -}
    let handler = case diff of {LeftOnly -> lA; RightOnly -> rA; Both -> bA}
    act <- liftIO $ handler (path </> fp)
+   {- traceM $ "[summaryJoin] act: " ++ show act -}
    case act of
       Nothing -> Con.yield (Left Yes)
-      Just act' -> Con.yield (Right act') >> Con.yield (Left No)
+      Just act' -> {- trace ("[summaryJoin] yield: " ++ show act') -} (Con.yield (Right act')) >> Con.yield (Left No)
 summaryJoin _ _ _ _ _ _ _ = error "summaryJoin: pattern match failure. This should never happen."
 
 -- |Left join. See 'summaryJoin'.
@@ -123,20 +88,27 @@ summaryOuterJoin = summaryJoin (return . Just . Copy LeftSide)
                                (return . Just . Copy RightSide)
                                (const $ return Nothing)
 
--- |Takes a list of actions and runs them after asking the user
---  for confirmation. Iff the user cancels, the function returns 'False'.
-performSummaryJoin :: LeftRoot -> RightRoot -> Con.Sink FileAction IO Bool
-performSummaryJoin left right = do
-   liftIO $ putStrLn "You are about to perform the following operations:"
-   liftIO $ putStrLn $ "Left directory: " ++ getFilePath left
-   liftIO $ putStrLn $ "Right directory: " ++ getFilePath right
+-- |Prints a summary of actions to be done and asks the user whether to proceed.
+--  If the user enters "yes", the file consumed file actions are yielded back.
+--  Otherwise, nothing is yielded.
+--
+--  Note that this function lists all actions to be done and therefore
+--  pulls them all into memory.
+askSummaryJoin :: LeftRoot -> RightRoot -> Con.Conduit FileAction IO FileAction
+askSummaryJoin lr rr = do
    actions <- ConL.consume
+   liftIO $ putStrLn "You are about to perform the following operations:"
+   liftIO $ putStrLn $ "Left directory: " ++ getFilePath lr
+   liftIO $ putStrLn $ "Right directory: " ++ getFilePath rr
    liftIO $ mapM (putStrLn . showFileAction) actions
    liftIO $ putStrLn "Are you SURE (y/n)?"
    (answer :: YesNo) <- ask' yesNoAsker
-   case answer of
-      Yes -> liftIO (mapM (performFileAction left right) actions) >> return True
-      No -> liftIO (putStrLn "Doing nothing.") >> return False
+   when (answer == Yes) (mapM_ Con.yield actions)
+
+-- |Takes a list of 'FileAction's and performs each in succession.
+performSummaryJoin :: LeftRoot -> RightRoot -> Con.Sink FileAction IO ()
+performSummaryJoin left right = {- trace "[performSummaryJoin]" $ -} do
+   Con.awaitForever (\a -> {- trace ("[performSummaryJoin]_ " ++ showFileAction a) $ -} liftIO $ performFileAction left right a)
 
 yesNoAsker :: Monad m => Asker m T.Text YesNo
 yesNoAsker = predAsker

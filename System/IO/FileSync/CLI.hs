@@ -10,7 +10,6 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Either
 import Control.Monad.Trans.State
 import qualified Data.Conduit as Con
-import qualified Data.Conduit.List as Con
 import qualified Data.Foldable as F
 import Data.Functor.Monadic
 import qualified Data.Map as M
@@ -18,7 +17,6 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as St
 import qualified Data.Text as T
-import Data.Void
 import System.FilePath
 import System.IO.FileSync.Join
 import System.IO.FileSync.JoinStrategies
@@ -74,7 +72,10 @@ maim = evalStateT repl (AppState [] Nothing [])
                   liftIO $ putStrLn ("Use ':rename' to rename the conflicting files." :: String)
                   modify (\s -> s{_appStateConflicts = errs', _appStateLastDirs = Just (src', trg')})
                 (Right diff') -> do
-                  liftIO $ syncForests strat src trg (filterForest filtF diff') Con.$$ Con.sinkNull
+                  let actions = syncForests strat src trg (filterForest filtF diff')
+                  liftIO (actions
+                          Con.=$= askSummaryJoin src trg
+                          Con.$$ performSummaryJoin src trg)
                   clearConflicts)
 
       cmdList :: Cmd
@@ -168,7 +169,7 @@ maim = evalStateT repl (AppState [] Nothing [])
          where
             errMsg = (<> " could not be read.") . T.pack
 
-      joinStrategyAsker :: MonadIO m => Asker m T.Text (T.Text, JoinStrategy Void)
+      joinStrategyAsker :: MonadIO m => Asker m T.Text (T.Text, JoinStrategy FileAction)
       joinStrategyAsker = predAsker
          "Enter join strategy name: "
          (\t -> return $ case M.lookup (T.strip t) joinStrategies of
@@ -181,24 +182,13 @@ maim = evalStateT repl (AppState [] Nothing [])
       otherIOErrorHandler :: IOException -> StateT AppState IO ()
       otherIOErrorHandler _ = liftIO $ putStrLn ("IO exception!" :: String)
 
-joinStrategies :: M.Map T.Text (JoinStrategy Void)
+joinStrategies :: M.Map T.Text (JoinStrategy FileAction)
 joinStrategies = M.fromList
-   [("simpleLeft", simpleLeftJoin),
-    ("simpleRight", simpleRightJoin),
-    ("simpleInner", simpleInnerJoin),
-    ("simpleOuter", simpleOuterJoin),
-
-    ("summaryLeft", runSummaryJoin summaryLeftJoin),
-    ("summaryRight", runSummaryJoin summaryRightJoin),
-    ("summaryInner", runSummaryJoin summaryInnerJoin),
-    ("summaryOuter", runSummaryJoin summaryOuterJoin)
+   [("left", summaryLeftJoin),
+    ("right", summaryRightJoin),
+    ("inner", summaryInnerJoin),
+    ("outer", summaryOuterJoin)
    ]
-
-runSummaryJoin :: JoinStrategy FileAction -> JoinStrategy Void
-runSummaryJoin j lr rr fp t = do
-   liftIO $ (Con.mapOutputMaybe (either (const Nothing) Just) (j lr rr fp t)
-             Con.$$ performSummaryJoin lr rr)
-   return ()
 
 -- |Clears the conflicts and the last dirs fields of the app state.
 clearConflicts :: StateT AppState IO ()

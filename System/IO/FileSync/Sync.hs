@@ -20,6 +20,8 @@ import System.FilePath
 import System.IO.FileSync.Join
 import System.IO.FileSync.Types
 
+-- import Debug.Trace
+
 -- |Takes a root directory and creates a tree representing its structure,
 --  starting with the immediate children.
 --
@@ -75,10 +77,11 @@ syncTrees strategy src trg = go ""
    where
       throughput [] = return Yes
       throughput (Right x:xs) = Con.yield x >> throughput xs
-      throughput (Left x:_) = return x
+      throughput (Left x:_) = {- trace ("[syncTrees.throughput]" ++ show x) $ -} return x
 
       go path node@(T.Node (FTD x _,_) xs) = do
-         continue <- liftIO (Con.sourceToList (strategy src trg path node)) >>= throughput
+         continue <- liftIO (Con.sourceToList (strategy src trg path node)) >>= (\xs -> {- trace ("[syncTrees] action list: " ++ show xs) $ -} throughput xs)
+         {- traceM $ "[syncTrees] continue=" ++ show continue -}
          when (continue == Yes) $ mapM_ (go $ path </> x) xs
 
 -- |See 'syncTrees'. Works with forests.

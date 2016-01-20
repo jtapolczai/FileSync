@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module System.IO.FileSync.Tests.Tests where
@@ -15,7 +16,6 @@ import Data.Time.Calendar
 import Data.Time.Clock
 import qualified Data.Tree as Tr
 import qualified Data.Tree.Monadic as Mt
-import Data.Void
 import System.Directory
 import System.IO
 import System.FilePath
@@ -55,10 +55,6 @@ tests = TestList
     TestLabel "filterTree1" $ TestCase filterTree1,
     TestLabel "filterTree2" $ TestCase filterTree2,
     TestLabel "filterTree3" $ TestCase filterTree3,
-    TestLabel "simpleJoinL1" $ TestCase simpleJoinL1,
-    TestLabel "simpleJoinR1" $ TestCase simpleJoinR1,
-    TestLabel "simpleJoinO1" $ TestCase simpleJoinO1,
-    TestLabel "simpleJoinI1" $ TestCase simpleJoinI1,
     TestLabel "summaryJoinL_noChange" $ TestCase summaryJoinL_noChange,
     TestLabel "summaryJoinR_noChange" $ TestCase summaryJoinR_noChange,
     TestLabel "summaryJoinO_noChange" $ TestCase summaryJoinO_noChange,
@@ -73,6 +69,10 @@ tests = TestList
     TestLabel "summaryJoinI5_size_identical" $ TestCase summaryJoinI5_size_identical,
     TestLabel "summaryJoinI6_overwriteWithLeft" $ TestCase summaryJoinI6_overwriteWithLeft,
     TestLabel "summaryJoinI7_overwriteWithRight" $ TestCase summaryJoinI7_overwriteWithRight,
+    TestLabel "performSummaryJoinL1" $ TestCase performSummaryJoinL1,
+    TestLabel "performSummaryJoinR1" $ TestCase performSummaryJoinR1,
+    TestLabel "performSummaryJoinI1" $ TestCase performSummaryJoinI1,
+    TestLabel "performSummaryJoinO1" $ TestCase performSummaryJoinO1,
     TestLabel "getFileSize1" $ TestCase getFileSize1
     ]
 
@@ -176,40 +176,6 @@ filterTree3 = assertEqual "all keys >10 filtered out" (filterForest (<=10) [tr1]
 
 -- Simple join
 -------------------------------------------------------------------------------
-
-simpleJoin_template :: (TreeDiff -> Bool)
-                    -> JoinStrategy Void
-                    -> Assertion
-simpleJoin_template okElems strategy = bracket'
-   (testDirsL >> testDirsR)
-   (rmD "testDir")
-   (do res <- runEitherT $ syncDirectories strategy lr rr
-       assertBool "synDirectories must be successful" (isRight res)
-       Con.runConduit $ fromRight res
-       let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
-       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
-       assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
-       ft2 <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
-
-       putStrLn "Left forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1
-       putStrLn "Right forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft2
-
-       assertBool "directories match after join" $ ft1 == ft2)
-
-simpleJoinL1 :: Assertion
-simpleJoinL1 = simpleJoin_template (flip elem [LeftOnly, Both]) simpleLeftJoin
-
-simpleJoinR1 :: Assertion
-simpleJoinR1 = simpleJoin_template (flip elem [Both, RightOnly]) simpleRightJoin
-
-simpleJoinO1 :: Assertion
-simpleJoinO1 = simpleJoin_template (flip elem [LeftOnly, Both, RightOnly]) simpleOuterJoin
-
-simpleJoinI1 :: Assertion
-simpleJoinI1 = simpleJoin_template (flip elem [Both]) simpleInnerJoin
 
 -- Summary join
 -------------------------------------------------------------------------------
@@ -388,6 +354,52 @@ summaryJoinI7_overwriteWithRight = summaryJoin_template
           >> assertContent "both2_right" "testDir/dir2/both/both1/both2.txt"
           >> assertContent "both3_right larger" "testDir/dir1/both/both1/both3.txt"
           >> assertContent "both3_right larger" "testDir/dir2/both/both1/both3.txt"))
+
+-- Perform summary join
+-------------------------------------------------------------------------------
+
+performSummaryJoin_template
+   :: (TreeDiff -> Bool)
+   -> (JoinStrategy FileAction)
+   -> Maybe Assertion -- ^Additional, optional assertion at the end.
+   -> Assertion
+performSummaryJoin_template okElems strategy ass = bracket'
+   (testDirsL >> testDirsR)
+   (rmD "testDir")
+   (do res <- runEitherT $ syncDirectories strategy lr rr
+       assertBool "synDirectories must be successful" (isRight res)
+       fromRight res Con.$$ performSummaryJoin lr rr
+       let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
+       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
+       assertBool "join performed" dirsMatch
+       ft1 <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
+       ft2 <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
+       assertBool "directories match after join" $ ft1 == ft2
+       fromMaybe (return ()) ass)
+
+performSummaryJoinL1 :: Assertion
+performSummaryJoinL1 = performSummaryJoin_template
+   (flip elem [LeftOnly, Both])
+   summaryLeftJoin
+   Nothing
+
+performSummaryJoinR1 :: Assertion
+performSummaryJoinR1 = performSummaryJoin_template
+   (flip elem [Both, RightOnly])
+   summaryRightJoin
+   Nothing
+
+performSummaryJoinI1 :: Assertion
+performSummaryJoinI1 = performSummaryJoin_template
+   (flip elem [Both])
+   summaryInnerJoin
+   Nothing
+
+performSummaryJoinO1 :: Assertion
+performSummaryJoinO1 = performSummaryJoin_template
+   (flip elem [LeftOnly, Both, RightOnly])
+   summaryOuterJoin
+   Nothing
 
 -- Get file size
 -------------------------------------------------------------------------------

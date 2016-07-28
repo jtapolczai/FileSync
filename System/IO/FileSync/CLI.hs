@@ -117,8 +117,8 @@ maim = evalStateT repl (AppState [] Nothing [])
              conflicts <-
                 if sameDirs then _appStateConflicts <$> get
                 else do diff <- liftIO $ runEitherT $ createDiffTree (LR src) (RR trg)
-                        return $ either (F.toList . fmap fromFTD) (const []) diff 
-             
+                        return $ either (F.toList . fmap fromFTD) (const []) diff
+
              renamings <- liftIO $ renameConflicts [LR src, LR trg] conflicts
              liftIO $ mapM_ (\(r, o, n) -> putStrLn $ (r </> o) ++ " renamed to " ++ n) renamings
              clearConflicts
@@ -154,7 +154,7 @@ maim = evalStateT repl (AppState [] Nothing [])
          (\t _ -> liftIO $ putStrLn $ "Unknown command " ++ T.unpack t ++ ".")
 
       dirAsker :: MonadIO m => T.Text -> Asker' m FilePath
-      dirAsker pr = writablefilepathAsker pr
+      dirAsker pr = writableFilepathAsker pr
                        (\fp -> genericTypeError $ errMsg fp)
                        (\(ex, fp) -> return $ if ex == IsDirectory then Right fp
                                               else Left $ genericPredicateError $ errMsg fp)
@@ -162,7 +162,7 @@ maim = evalStateT repl (AppState [] Nothing [])
             errMsg = (<> " is not a valid, writable directory.") . T.pack
 
       existentFileAsker :: MonadIO m => T.Text -> Asker' m FilePath
-      existentFileAsker pr = writablefilepathAsker pr
+      existentFileAsker pr = writableFilepathAsker pr
                               (\fp -> genericTypeError $ errMsg fp)
                               (\(ex, fp) -> return $ if ex == IsFile then Right fp
                                                      else Left $ genericPredicateError $ errMsg fp)

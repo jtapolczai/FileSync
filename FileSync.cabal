@@ -14,6 +14,10 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+source-repository head
+  type:     git
+  location: https://github.com/jtapolczai/FileSync
+
 Test-Suite unit-tests
   type:                exitcode-stdio-1.0
   main-is:             System/IO/FileSync/Tests.hs
@@ -45,7 +49,7 @@ Test-Suite unit-tests
                        monad-loops >=0.4 && <0.8,
                        mtl >=2.2 && <3,
                        parsec >=3.1 && <4,
-                       repl-toolkit >=1 && <1.2,
+                       repl-toolkit >=1.0.1 && <1.2,
                        semigroupoids >=5.0 && <6,
                        text >=1.2 && <2,
                        time >=1.4 && <1.8,
@@ -53,7 +57,13 @@ Test-Suite unit-tests
                        uuid >=1.2.6 && <1.5
 
 library
-  exposed-modules:     Main, System.IO.Mock, System.IO.FileSync.Join, System.IO.FileSync.Types, System.IO.FileSync.Sync, System.IO.FileSync.CLI, System.IO.FileSync.JoinStrategies
+  exposed-modules:     Main,
+                       System.IO.Mock,
+                       System.IO.FileSync.Join,
+                       System.IO.FileSync.Types,
+                       System.IO.FileSync.Sync,
+                       System.IO.FileSync.CLI,
+                       System.IO.FileSync.JoinStrategies
   other-extensions:    DeriveDataTypeable,
                        ExistentialQuantification,
                        FlexibleContexts,
@@ -81,7 +91,7 @@ library
                        monad-loops >=0.4 && <0.8,
                        mtl >=2.2 && <3,
                        parsec >=3.1 && <4,
-                       repl-toolkit >=1 && <1.2,
+                       repl-toolkit >=1.0.1 && <1.2,
                        semigroupoids >=5.0 && <6,
                        text >=1.2 && <2,
                        time >=1.4 && <1.8,

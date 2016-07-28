@@ -14,5 +14,5 @@ cabal.sandbox.config
 *.prof
 *.aux
 *.hp
-System/REPL.hs
-System/REPL
+.stack-work/
+*.sublime-workspace

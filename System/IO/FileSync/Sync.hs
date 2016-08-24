@@ -21,7 +21,7 @@ import qualified System.IO.Error as Err
 import System.IO.FileSync.Join
 import System.IO.FileSync.Types
 
-import Debug.Trace
+-- import Debug.Trace
 
 -- |Takes a root directory and creates a tree representing its structure,
 --  starting with the immediate children.
@@ -37,14 +37,15 @@ createFileTree
 createFileTree src = Mt.subForest $ go "" (getFilePath src)
    where
       go root this = Mt.MTree $ do
-         traceM ("[createFileTree")
+         -- traceM ("[createFileTree")
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
          thisIsFile <- doesFileExist (root </> this)
          thisIsDir <- doesDirectoryExist (root </> this)
          if thisIsFile then return (FTD this File, [Mt.MTree $ return (FTD (takeFileName this) File, [])])
          else if thisIsDir then do
-            traceM $ "[createFileTree] getting directory contents of: " ++ (root </> this)
+            -- traceM $ "[createFileTree] getting directory contents of: " ++ (root </> this)
             contents <- getDirectoryContents (root </> this)
+            -- traceM $ "[createFileTree] success"
             (files, dirs) <- partition fst <$> mapM isFile contents
             let files' = map (\(_,x) -> Mt.MTree $ return (FTD x File, [])) files
                 dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs

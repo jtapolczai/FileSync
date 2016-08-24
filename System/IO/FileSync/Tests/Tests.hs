@@ -599,8 +599,9 @@ directoryStructureMatches fp xs = do
    if isFile then return $ null xs
    else if not isDir then return False
    else do
-      traceM ("Getting directory contents of: " ++ fp)
+      -- traceM ("[directoryStructureMatches] Getting directory contents of: " ++ fp)
       contents <- filter (not . flip elem [".",".."]) <$> getDirectoryContents fp
+      -- traceM ("[directoryStructureMatches] success.")
       dirs <- filterM doesDirectoryExist contents
       files <- St.fromList <$> filterM doesFileExist contents
 

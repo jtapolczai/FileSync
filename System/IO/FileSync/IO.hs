@@ -8,7 +8,7 @@ import System.FilePath
 import System.IO
 import System.IO.Error
 
-import Debug.Trace
+-- import Debug.Trace
 
 -- |Gets the size of a file in bytes.
 --
@@ -25,19 +25,20 @@ getFileSize fp = do
    hClose h
    return size
 
--- |Copies a directory recursively. Tries to copy permissions.
+-- |Copies a directory (or a file) recursively. Tries to copy permissions.
 --  Does not handle exceptions. The target directory will be created if it does not exist.
 copyDirectory :: FilePath -> FilePath -> IO ()
-copyDirectory src trg = go ""
+copyDirectory src trg = copyRec ""
    where
       -- Tries to copy a directory. Fails (safely) if (sPath </> path) is not a directory.
       go :: FilePath -> IO ()
       go path = do
          let sPath = src </> path
              tPath = trg </> path
-         traceM $ "[copyDirectory] getting directory contents of " ++ sPath
+         -- traceM $ "[copyDirectory] getting directory contents of " ++ sPath
          -- if this succeeds, we have an existent directory and try to copy it
          contents <- filter (not . flip elem [".",".."]) <$> getDirectoryContents sPath
+         -- traceM ("[directoryStructureMatches] success.")
          createDirectory tPath
          copyPermissions sPath tPath
          -- recursive call. Note: no distinction between files and subdirectories.
@@ -49,7 +50,10 @@ copyDirectory src trg = go ""
                                  isInappropriateTypeError,
                                  isInvalidArgumentError]
                                 (go path)
-                                (copyFile (src </> path) (trg </> path))
+                                (do --traceM ("[directoryStructureMatches] failed, copying file instead.")
+                                    copyFile (src </> path) (trg </> path)
+                                    --traceM ("[directoryStructureMatches] success at copyFile.")
+                                 )
 
 -- |Returns True iff an 'IOError' is of type 'InappropriateType'. GHC-specific.
 isInappropriateTypeError :: IOError -> Bool

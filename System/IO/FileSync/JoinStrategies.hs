@@ -60,8 +60,8 @@ summaryJoin lA rA bA _ _ path (JNode fp diff) = do
    act <- liftIO $ handler (path </> fp)
    {- traceM $ "[summaryJoin] act: " ++ show act -}
    case act of
-      Nothing -> Con.yield (Left Yes)
-      Just act' -> {- trace ("[summaryJoin] yield: " ++ show act') -} (Con.yield (Right act')) >> Con.yield (Left No)
+      Nothing -> return Yes
+      Just act' -> {- trace ("[summaryJoin] yield: " ++ show act') -} (Con.yield act') >> return No
 summaryJoin _ _ _ _ _ _ _ = error "summaryJoin: pattern match failure. This should never happen."
 
 -- |Left join. See 'summaryJoin'.
@@ -119,7 +119,7 @@ yesNoAsker = predAsker
 
 -- |Shows a 'FileAction' as a short line.
 --  The path is printed, along with a code:
--- 
+--
 --  1. "Copy to right": "C -->"
 --  1. "Copy to left": "C <--"
 --  1. "Delete from left": "D L"
@@ -175,11 +175,11 @@ overwriteWithNewer (LR lr) (RR rr) fp = let
 --  * Both entries have the same size.
 --
 --  Does not handle exceptions besides 'InappropriateType' and 'PermissionError'.
-overwriteWithLarger 
+overwriteWithLarger
    :: LeftRoot
    -> RightRoot
    -> DifferenceHandler
-overwriteWithLarger (LR lr) (RR rr) fp = do 
+overwriteWithLarger (LR lr) (RR rr) fp = do
    lT <- handleIOErrors [isPermissionError, isInappropriateTypeError] $ getFileSize (lr </> fp)
    rT <- handleIOErrors [isPermissionError, isInappropriateTypeError] $ getFileSize (rr </> fp)
    return $ if lT > rT then Just (Copy LeftSide fp)
@@ -214,7 +214,7 @@ applyDeleteAction
    => src -- |Root S of the source.
    -> FilePath -- ^Path P in the tree, starting from the root.
    -> IO ()
-applyDeleteAction src path = 
+applyDeleteAction src path =
    catchThese [isDoesNotExistError, isInappropriateTypeError]
               (removeDirectoryRecursive sPath)
               (removeFile sPath)
@@ -233,7 +233,7 @@ applyInsertAction
    -> trg -- |Root T of the target.
    -> FilePath -- ^Path P in the tree, starting from the roots.
    -> IO ()
-applyInsertAction src trg path = 
+applyInsertAction src trg path =
    catchThese [isDoesNotExistError, isInappropriateTypeError]
               (copyDirectory sPath tPath)
               (copyFile sPath tPath)

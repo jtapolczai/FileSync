@@ -18,7 +18,10 @@ import qualified Data.Tree as Tr
 import qualified Data.Tree.Monadic as Mt
 import System.Directory
 import System.IO
-import System.FilePath
+import System.FilePath hiding ((</>))
+ -- we overwrite </> so that it only inserts slashes (/)
+ -- apparently, Windows has a problem with paths that mix / and \\.
+import qualified System.FilePath as FP
 import Test.Hspec
 import Test.Hspec.Contrib.HUnit
 import Test.HUnit
@@ -29,6 +32,8 @@ import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 
+import Debug.Trace (traceM)
+
 data TwoKey = TK String String deriving (Show, Eq, Ord)
 
 instance LooseEq TwoKey where
@@ -37,6 +42,23 @@ instance LooseEq TwoKey where
 
 runTests :: IO ()
 runTests = hspec . fromHUnitTest $ tests
+
+-- |Utility to turn \\ into /. Windows' usage of \\ as path separator
+--  causes test failures.
+replaceSlashes :: Functor f => f FileAction -> f FileAction
+replaceSlashes = fmap r
+   where
+      r (Delete s p) = (Delete s $ map slashes p)
+      r (Copy s p) = (Copy s $ map slashes p)
+
+      slashes '\\' = '/'
+      slashes x = x
+
+(</>) :: FilePath -> FilePath -> FilePath
+(</>) f1 f2 = map slashes (f1 FP.</> f2)
+   where
+      slashes '\\' = '/'
+      slashes x = x
 
 tests = TestList
    [TestLabel "createEmptyFileTree" $ TestCase createEmptyFileTree,
@@ -92,9 +114,9 @@ createFileTree1 = bracket'
    (rmD "testDir")
    (do t <- createFileTree lr >>= mapM Mt.materialize
        putStrLn "Expected forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1 
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1
        putStrLn "Actual forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t
        assertEqual "file tree 1" (sortForest ft1) (sortForest t))
 
 createFileTree2 :: Assertion
@@ -122,7 +144,7 @@ createDiffTree1 = bracket'
        putStrLn "Expected forest:"
        putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
        putStrLn "Actual forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t 
+       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t
        assertEqual "diff tree 1" (sortForest dt1) (sortForest t))
 
 createDiffTree2 :: Assertion
@@ -158,7 +180,7 @@ sortTree6 :: Assertion
 sortTree6 = assertEqual "equal forests mod. sorting" (sortForest [tr1, tr2]) (sortForest [tr2, tr1])
 
 sortTree7 :: Assertion
-sortTree7 = assertBool "different trees (even mod. sorting)" $ sortForest [tr1] /= sortForest [tr3] 
+sortTree7 = assertBool "different trees (even mod. sorting)" $ sortForest [tr1] /= sortForest [tr3]
 
 -- Filter
 -------------------------------------------------------------------------------
@@ -216,12 +238,13 @@ summaryJoin_template okElems strategy expectedActions ass = bracket'
    (rmD "testDir")
    (do actions' <- runEitherT $ syncDirectories strategy lr rr
        assertBool "synDirectories must be successful" (isRight actions')
-       actions <- Con.sourceToList $ fromRight actions'
+       actions <- replaceSlashes <$> (Con.sourceToList $ fromRight actions')
        maybe (return ())
-             (\ea -> assertEqual "list of FileActions" 
-                                 (St.fromList ea) 
+             (\ea -> assertEqual "list of FileActions"
+                                 (St.fromList ea)
                                  (St.fromList $ toList actions))
              expectedActions
+       traceM $ show actions
        mapM (performFileAction lr rr) actions
        let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
@@ -549,7 +572,7 @@ l :: a -> Tr.Tree a
 l = flip Tr.Node []
 
 -- |Shorthand for creating a directory (and its parents too) if it doesn't exist.
-mkD :: FilePath -> IO () 
+mkD :: FilePath -> IO ()
 mkD = createDirectoryIfMissing True
 
 -- |Shorthand for creating a text file in a directory. Creates the parents if they don't exist.
@@ -576,6 +599,7 @@ directoryStructureMatches fp xs = do
    if isFile then return $ null xs
    else if not isDir then return False
    else do
+      traceM ("Getting directory contents of: " ++ fp)
       contents <- filter (not . flip elem [".",".."]) <$> getDirectoryContents fp
       dirs <- filterM doesDirectoryExist contents
       files <- St.fromList <$> filterM doesFileExist contents
@@ -600,7 +624,7 @@ directoryStructureMatches fp xs = do
 setModTime :: Integer -- ^Year
            -> Int -- ^Month
            -> Int -- ^Day
-           -> FilePath 
+           -> FilePath
            -> IO ()
 setModTime y m d fp =
    setModificationTime fp $ UTCTime (fromGregorian y m d) $ secondsToDiffTime 0

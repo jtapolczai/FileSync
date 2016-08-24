@@ -83,7 +83,7 @@ type JoinStrategy a =
    -> RightRoot
    -> FilePath
    -> T.Tree (FileTreeData, TreeDiff)
-   -> Con.Source IO (Either Continue a)
+   -> Con.ConduitM () a IO Continue
 
 type DifferenceHandler = FilePath -> IO (Maybe FileAction)
 
@@ -93,8 +93,10 @@ data RootSide = LeftSide | RightSide
 data FileAction = Delete RootSide FilePath | Copy RootSide FilePath
    deriving (Show, Eq, Ord, Read)
 
+-- |Indicates whether the descent into a tree should continue.
 type Continue = YesNo
 
+-- |Yes or no.
 data YesNo = Yes | No
    deriving (Show, Eq, Ord, Enum, Bounded)
 

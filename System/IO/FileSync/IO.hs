@@ -2,11 +2,13 @@
 module System.IO.FileSync.IO where
 
 import Control.Exception
-import GHC.IO.Exception (IOErrorType(InappropriateType))
+import GHC.IO.Exception (IOErrorType(InappropriateType, InvalidArgument))
 import System.Directory
 import System.FilePath
 import System.IO
 import System.IO.Error
+
+import Debug.Trace
 
 -- |Gets the size of a file in bytes.
 --
@@ -33,6 +35,7 @@ copyDirectory src trg = go ""
       go path = do
          let sPath = src </> path
              tPath = trg </> path
+         traceM $ "[copyDirectory] getting directory contents of " ++ sPath
          -- if this succeeds, we have an existent directory and try to copy it
          contents <- filter (not . flip elem [".",".."]) <$> getDirectoryContents sPath
          createDirectory tPath
@@ -42,7 +45,9 @@ copyDirectory src trg = go ""
          mapM_ (copyRec . (path </>)) contents
 
       copyRec :: FilePath -> IO ()
-      copyRec path = catchThese [isDoesNotExistError, isInappropriateTypeError]
+      copyRec path = catchThese [isDoesNotExistError,
+                                 isInappropriateTypeError,
+                                 isInvalidArgumentError]
                                 (go path)
                                 (copyFile (src </> path) (trg </> path))
 
@@ -53,6 +58,13 @@ isInappropriateTypeError = t . ioeGetErrorType
       t InappropriateType = True
       t _ = False
 
+-- |Returns True iff an 'IOError' is of type 'InvalidArgument'. GHC-specific.
+isInvalidArgumentError :: IOError -> Bool
+isInvalidArgumentError = t . ioeGetErrorType
+   where
+      t InvalidArgument = True
+      t _ = False
+
 -- Error handling
 -------------------------------------------------------------------------------
 
@@ -61,7 +73,7 @@ isInappropriateTypeError = t . ioeGetErrorType
 catchThese :: [IOError -> Bool]
            -> IO a -- ^Action A to perform
            -> IO a -- ^Action to perform instead if an error was caught.
-           -> IO a 
+           -> IO a
 catchThese handlers action failureAction = catchJust
    (\e -> if any ($ e) handlers then Just () else Nothing)
    action

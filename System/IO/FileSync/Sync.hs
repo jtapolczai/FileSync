@@ -16,16 +16,20 @@ import qualified Data.Tree as T
 import qualified Data.Tree.Monadic as Mt
 import System.Directory
 import System.FilePath
+import qualified System.IO.Error as Err
 
 import System.IO.FileSync.Join
 import System.IO.FileSync.Types
 
--- import Debug.Trace
+import Debug.Trace
 
 -- |Takes a root directory and creates a tree representing its structure,
 --  starting with the immediate children.
 --
 --  Will create a one-element forest if the root is a file.
+--
+--  If a file/directory is moved during the operation, an 'Err.doesNotExist'
+--  IO error is thrown.
 createFileTree
    :: FileRoot src
    => src
@@ -33,16 +37,24 @@ createFileTree
 createFileTree src = Mt.subForest $ go "" (getFilePath src)
    where
       go root this = Mt.MTree $ do
+         traceM ("[createFileTree")
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
-         thisIsFile <- doesFileExist this
+         thisIsFile <- doesFileExist (root </> this)
+         thisIsDir <- doesDirectoryExist (root </> this)
          if thisIsFile then return (FTD this File, [Mt.MTree $ return (FTD (takeFileName this) File, [])])
-         else do
+         else if thisIsDir then do
+            traceM $ "[createFileTree] getting directory contents of: " ++ (root </> this)
             contents <- getDirectoryContents (root </> this)
             (files, dirs) <- partition fst <$> mapM isFile contents
             let files' = map (\(_,x) -> Mt.MTree $ return (FTD x File, [])) files
                 dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs
                 children = map (go $ root </> this) dirs'
             return (FTD this Directory, files' ++ children)
+         else ioError $ Err.mkIOError
+                           Err.doesNotExistErrorType
+                           (root </> this)
+                           Nothing
+                           (Just $ root </> this)
 
 -- |Creates a difference tree between two directories.
 --  The roots themselves will not be included in the resultant tree,
@@ -80,8 +92,7 @@ syncTrees strategy src trg = go ""
       throughput (Left x:_) = {- trace ("[syncTrees.throughput]" ++ show x) $ -} return x
 
       go path node@(T.Node (FTD x _,_) xs) = do
-         continue <- liftIO (Con.sourceToList (strategy src trg path node)) >>= (\xs -> {- trace ("[syncTrees] action list: " ++ show xs) $ -} throughput xs)
-         {- traceM $ "[syncTrees] continue=" ++ show continue -}
+         continue <- strategy src trg path node
          when (continue == Yes) $ mapM_ (go $ path </> x) xs
 
 -- |See 'syncTrees'. Works with forests.

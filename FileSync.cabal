@@ -58,11 +58,14 @@ Test-Suite unit-tests
 
 library
   exposed-modules:     Main,
+                       Data.Tree.Monadic
                        System.IO.Mock,
                        System.IO.FileSync.Join,
                        System.IO.FileSync.Types,
                        System.IO.FileSync.Sync,
                        System.IO.FileSync.CLI,
+                       System.IO.FileSync.IO,
+                       System.IO.FileSync.Rename,
                        System.IO.FileSync.JoinStrategies
   other-extensions:    DeriveDataTypeable,
                        ExistentialQuantification,

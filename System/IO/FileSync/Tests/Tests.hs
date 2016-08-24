@@ -113,10 +113,10 @@ createFileTree1 = bracket'
    testDirsL
    (rmD "testDir")
    (do t <- createFileTree lr >>= mapM Mt.materialize
-       putStrLn "Expected forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1
-       putStrLn "Actual forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t
+       -- putStrLn "Expected forest:"
+       -- putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1
+       -- putStrLn "Actual forest:"
+       -- putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t
        assertEqual "file tree 1" (sortForest ft1) (sortForest t))
 
 createFileTree2 :: Assertion
@@ -141,10 +141,10 @@ createDiffTree1 = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
    (do (Right t) <- runEitherT $ createDiffTree lr rr
-       putStrLn "Expected forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
-       putStrLn "Actual forest:"
-       putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t
+       -- putStrLn "Expected forest:"
+       -- putStrLn . Tr.drawForest . map (fmap show) . sortForest $ dt1
+       -- putStrLn "Actual forest:"
+       -- putStrLn . Tr.drawForest . map (fmap show) . sortForest $ t
        assertEqual "diff tree 1" (sortForest dt1) (sortForest t))
 
 createDiffTree2 :: Assertion

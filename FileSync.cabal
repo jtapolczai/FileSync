@@ -22,7 +22,7 @@ Test-Suite unit-tests
   type:                exitcode-stdio-1.0
   main-is:             System/IO/FileSync/Tests.hs
   default-language:    Haskell2010
-  other-extensions:    DeriveDataTypeable,
+  default-extensions:  DeriveDataTypeable,
                        ExistentialQuantification,
                        FlexibleContexts,
                        LambdaCase,
@@ -67,7 +67,7 @@ library
                        System.IO.FileSync.IO,
                        System.IO.FileSync.Rename,
                        System.IO.FileSync.JoinStrategies
-  other-extensions:    DeriveDataTypeable,
+  default-extensions:  DeriveDataTypeable,
                        ExistentialQuantification,
                        FlexibleContexts,
                        LambdaCase,

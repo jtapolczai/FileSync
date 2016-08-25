@@ -44,8 +44,9 @@ cli = do
    evalStateT repl (AppState [] Nothing [])
    where
       repl = makeREPL commands cmdExit cmdUnknown prompt
-                      [Handler unknownCommandHandler,
-                       Handler otherIOErrorHandler]
+                      ([Handler unknownCommandHandler,
+                        Handler otherIOErrorHandler
+                        ] ++ defErrorHandler)
 
       commands = [cmdSync, cmdList, cmdExcl, cmdRename, cmdHelp]
 

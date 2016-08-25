@@ -35,8 +35,13 @@ data AppState = AppState {
 
 type Cmd = Command (StateT AppState IO) T.Text ()
 
-maim :: IO ()
-maim = evalStateT repl (AppState [] Nothing [])
+cli :: IO ()
+cli = do
+   putStrLn ("FileSync v0.2" :: T.Text)
+   putStrLn ("Sync directory trees." :: T.Text)
+   putStrLn ("Enter :h or :help for a list of commands." :: T.Text)
+   putStrLn ("" :: T.Text)
+   evalStateT repl (AppState [] Nothing [])
    where
       repl = makeREPL commands cmdExit cmdUnknown prompt
                       [Handler unknownCommandHandler,

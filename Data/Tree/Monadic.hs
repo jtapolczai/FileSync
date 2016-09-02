@@ -1,8 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TupleSections #-}
-
 module Data.Tree.Monadic (
    MTree(..),
    nodeLabel,
@@ -33,6 +28,25 @@ data MTree m n = -- |An internal nodes with a value and children
 
 instance (Functor m) => Functor (MTree m) where
    fmap f (MTree m) = MTree $ fmap (\(x,xs) -> (f x, map (fmap f) xs)) m
+
+instance Applicative m => Applicative (MTree m) where
+   pure x = MTree $ pure (x, [])
+   (MTree f_arg) <*> (MTree m_arg) =
+      MTree $ mk <$> f_arg <*> m_arg
+         where
+            mk (f,fs) (m,ms) = (f m, ch1 ++ ch2)
+               where
+                  ch1 = map (fmap f) ms
+                  ch2 = map (<*> MTree (pure (m,ms))) fs
+
+instance Monad m => Monad (MTree m) where
+   (MTree m_arg) >>= f = MTree $ do
+                            (m,ms) <- m_arg
+                            let (MTree x_arg) = f m
+                            (x,xs) <- x_arg
+                            let xs' = xs ++ map (>>= f) ms
+                            return (x, xs')
+
 
 -- |Gets the node label of an MTree.
 nodeLabel :: Functor m => MTree m n -> m n

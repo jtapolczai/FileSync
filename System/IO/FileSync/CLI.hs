@@ -40,13 +40,11 @@ cli = do
    putStrLn ("FileSync v0.2" :: T.Text)
    putStrLn ("Sync directory trees." :: T.Text)
    putStrLn ("Enter :h or :help for a list of commands." :: T.Text)
+   putStrLn ("Enter :exit to exit the program." :: T.Text)
    putStrLn ("" :: T.Text)
    evalStateT repl (AppState [] Nothing [])
    where
-      repl = makeREPL commands cmdExit cmdUnknown prompt
-                      ([Handler unknownCommandHandler,
-                        Handler otherIOErrorHandler
-                        ] ++ defErrorHandler)
+      repl = makeREPLSimple commands
 
       commands = [cmdSync, cmdList, cmdExcl, cmdRename, cmdHelp]
 
@@ -139,26 +137,6 @@ cli = do
          "Prints this help text."
          (const $ summarizeCommands commands)
 
-      cmdExit :: Cmd
-      cmdExit = makeCommandN
-         ":[e]xit"
-         (defCommandTest [":e", ":exit"])
-         ("Exits the program.")
-         False
-         []
-         (repeat lineAsker)
-         (\_ _ -> return ())
-
-      cmdUnknown :: Cmd
-      cmdUnknown = makeCommandN
-         "Unknown"
-         (const True)
-         "Unknown command."
-         False
-         []
-         (repeat lineAsker)
-         (\t _ -> liftIO $ putStrLn $ "Unknown command " ++ T.unpack t ++ ".")
-
       dirAsker :: MonadIO m => T.Text -> Asker' m FilePath
       dirAsker pr = writableFilepathAsker pr
                        (\fp -> genericTypeError $ errMsg fp)
@@ -183,7 +161,7 @@ cli = do
                             Just s -> Right (t,s))
 
       unknownCommandHandler :: SomeCommandError -> StateT AppState IO ()
-      unknownCommandHandler _ = liftIO $ putStrLn ("Malformed command.":: String)
+      unknownCommandHandler _ = liftIO $ putStrLn ("Unknown command.":: String)
 
       otherIOErrorHandler :: IOException -> StateT AppState IO ()
       otherIOErrorHandler _ = liftIO $ putStrLn ("IO exception!" :: String)

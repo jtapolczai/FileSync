@@ -6,6 +6,7 @@
 module System.IO.FileSync.Sync where
 
 import Control.Monad.Trans.Either
+import Control.Monad.Trans.Tree as Mt
 import Control.Monad.Writer
 import qualified Data.Conduit as Con
 import Data.List
@@ -13,7 +14,6 @@ import Data.Ord
 import qualified Data.Foldable as F
 import qualified Data.Sequence as S
 import qualified Data.Tree as T
-import qualified Data.Tree.Monadic as Mt
 import System.Directory
 import System.FilePath
 import qualified System.IO.Error as Err
@@ -33,21 +33,21 @@ import System.IO.FileSync.Types
 createFileTree
    :: FileRoot src
    => src
-   -> IO [Mt.MTree IO FileTreeData]
+   -> IO [Mt.TreeT IO FileTreeData]
 createFileTree src = Mt.subForest $ go "" (getFilePath src)
    where
-      go root this = Mt.MTree $ do
+      go root this = Mt.TreeT $ do
          -- traceM ("[createFileTree")
          let isFile x = doesFileExist (root </> this </> x) >>= return . (,x)
          thisIsFile <- doesFileExist (root </> this)
          thisIsDir <- doesDirectoryExist (root </> this)
-         if thisIsFile then return (FTD this File, [Mt.MTree $ return (FTD (takeFileName this) File, [])])
+         if thisIsFile then return (FTD this File, [Mt.TreeT $ return (FTD (takeFileName this) File, [])])
          else if thisIsDir then do
             -- traceM $ "[createFileTree] getting directory contents of: " ++ (root </> this)
             contents <- getDirectoryContents (root </> this)
             -- traceM $ "[createFileTree] success"
             (files, dirs) <- partition fst <$> mapM isFile contents
-            let files' = map (\(_,x) -> Mt.MTree $ return (FTD x File, [])) files
+            let files' = map (\(_,x) -> Mt.TreeT $ return (FTD x File, [])) files
                 dirs' = filter (not . flip elem [".",".."]) . map snd $ dirs
                 children = map (go $ root </> this) dirs'
             return (FTD this Directory, files' ++ children)

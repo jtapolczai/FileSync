@@ -19,7 +19,7 @@ source-repository head
   location: https://github.com/jtapolczai/FileSync
 
 library
-  exposed-modules:     Data.Tree.Monadic,
+  exposed-modules:     Control.Monad.Trans.Tree,
                        System.IO.Mock,
                        System.IO.FileSync.Join,
                        System.IO.FileSync.Types,

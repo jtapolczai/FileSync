@@ -58,8 +58,13 @@ instance MonadTrans TreeT where
 instance MonadIO m => MonadIO (TreeT m) where
    liftIO m = TreeT $ (,[]) <$> (liftIO m)
 
-instance Foldable f => Foldable (TreeT f) where
+instance Foldable m => Foldable (TreeT m) where
    foldMap f (TreeT m) = foldMap (\(n,ns) -> f n <> foldMap (foldMap f) ns) m
+
+instance Traversable m => Traversable (TreeT m) where
+   traverse f (TreeT m) = TreeT <$> traverse f' m
+      where
+         f' (n,ns) = (,) <$> f n <*> traverse (traverse f) ns
 
 -- |Gets the node label of an TreeT.
 nodeLabel :: Functor m => TreeT m n -> m n

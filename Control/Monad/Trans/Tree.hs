@@ -22,6 +22,8 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Data.Monoid ((<>))
 import qualified Data.Tree as T
 
+import System.IO.FileSync.STM.Utils
+
 -- |Parametrizable Tree monad, with an inner monad.
 data TreeT m n = -- |An internal nodes with a value and children
                  --  wrapped in a monad.
@@ -74,6 +76,8 @@ mapTreeT f (TreeT m) = TreeT $ do
    (x,xs) <- m
    (, map (mapTreeT f) xs) <$> f x
 
+-------------------------------------------------------------------------------
+
 -- |Completely unrolls an 'TreeT' into a 'Tree' __depth-first__,
 --  evaluating all nodes.
 --
@@ -99,8 +103,6 @@ materialize (TreeT m) = do
 --
 --  Note that a node's children may be rearranged, depending
 --  on the order in which their processing finishes.
-materializePar = undefined
-{-
 materializePar :: TaskLimit
                   -- ^The upper limit on simultaneous tasks.
                   --  For @n=1@, 'materializePar' behaves identically to
@@ -108,11 +110,13 @@ materializePar :: TaskLimit
                   --  thread. Depending on the IO operations, this value should
                   --  be kept within reason.
                -> TreeT IO n
-               -> IO (Tree n)
+               -> IO (T.Tree n)
 materializePar numTasks (TreeT m) = do
    (v, children) <- withTaskLimit numTasks m
    results <- parMapSTM (materializePar numTasks) children
-   return $ Node v results -}
+   return $ T.Node v results
+
+-------------------------------------------------------------------------------
 
 -- |Unfolds an 'TreeT' from a monadic value.
 --  Analogous to 'Data.Tree.unfoldTreeM'

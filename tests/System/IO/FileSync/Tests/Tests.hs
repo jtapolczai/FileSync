@@ -6,6 +6,7 @@ module System.IO.FileSync.Tests.Tests where
 import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Either
+import Control.Monad.Trans.Tree
 import qualified Data.Conduit as Con
 import Data.Either
 import Data.Foldable (toList)
@@ -15,7 +16,6 @@ import qualified Data.Set as St
 import Data.Time.Calendar
 import Data.Time.Clock
 import qualified Data.Tree as Tr
-import qualified Data.Tree.Monadic as Mt
 import System.Directory
 import System.IO
 import System.FilePath hiding ((</>))
@@ -95,7 +95,10 @@ tests = TestList
     TestLabel "performSummaryJoinR1" $ TestCase performSummaryJoinR1,
     TestLabel "performSummaryJoinI1" $ TestCase performSummaryJoinI1,
     TestLabel "performSummaryJoinO1" $ TestCase performSummaryJoinO1,
-    TestLabel "getFileSize1" $ TestCase getFileSize1
+    TestLabel "getFileSize1" $ TestCase getFileSize1,
+    TestLabel "treeT" $ TestCase treeTEqual,
+    TestLabel "functorTreeT" $ TestCase functorTreeTEqual,
+    TestLabel "apTreeT" $ TestCase apTreeTEqual
     ]
 
 -- Create file tree
@@ -105,14 +108,14 @@ createEmptyFileTree :: Assertion
 createEmptyFileTree = bracket'
    (mkD "testDir/empty")
    (rmD "testDir")
-   (do t <- createFileTree (LR "testDir/empty") >>= mapM Mt.materialize
+   (do t <- createFileTree (LR "testDir/empty") >>= mapM materialize
        assertEqual "empty file tree" [] t)
 
 createFileTree1 :: Assertion
 createFileTree1 = bracket'
    testDirsL
    (rmD "testDir")
-   (do t <- createFileTree lr >>= mapM Mt.materialize
+   (do t <- createFileTree lr >>= mapM materialize
        -- putStrLn "Expected forest:"
        -- putStrLn . Tr.drawForest . map (fmap show) . sortForest $ ft1
        -- putStrLn "Actual forest:"
@@ -123,7 +126,7 @@ createFileTree2 :: Assertion
 createFileTree2 = bracket'
    testDirsL
    (rmD "testDir")
-   (do t <- createFileTree (LR "testDir/dir1/both/both.txt") >>= mapM Mt.materialize
+   (do t <- createFileTree (LR "testDir/dir1/both/both.txt") >>= mapM materialize
        assertEqual "file tree 2" t [Tr.Node (FTD "both.txt" File) []])
 
 -- Create diff tree
@@ -206,13 +209,13 @@ summaryJoin_noChange_template :: (JoinStrategy FileAction) -> Assertion
 summaryJoin_noChange_template joinStrategy = bracket'
    (testDirsL >> testDirsR)
    (rmD "testDir")
-   (do ftInitL <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
-       ftInitR <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
+   (do ftInitL <- sortForest <$> (createFileTree lr >>= mapM materialize)
+       ftInitR <- sortForest <$> (createFileTree rr >>= mapM materialize)
        res <- runEitherT $ syncDirectories joinStrategy lr rr
        assertBool "synDirectories must be successful" (isRight res)
        Con.sourceToList $ fromRight res
-       ftOutL <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
-       ftOutR <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
+       ftOutL <- sortForest <$> (createFileTree lr >>= mapM materialize)
+       ftOutR <- sortForest <$> (createFileTree rr >>= mapM materialize)
        assertBool "left directory didn't change without join" $ ftInitL == ftOutL
        assertBool "right directory didn't change without join" $ ftInitR == ftOutR)
 
@@ -249,8 +252,8 @@ summaryJoin_template okElems strategy expectedActions ass = bracket'
        let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
-       ft2 <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
+       ft1 <- sortForest <$> (createFileTree lr >>= mapM materialize)
+       ft2 <- sortForest <$> (createFileTree rr >>= mapM materialize)
        assertBool "directories match after join" $ ft1 == ft2
        fromMaybe (return ()) ass)
 
@@ -395,8 +398,8 @@ performSummaryJoin_template okElems strategy ass = bracket'
        let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
        dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
        assertBool "join performed" dirsMatch
-       ft1 <- sortForest <$> (createFileTree lr >>= mapM Mt.materialize)
-       ft2 <- sortForest <$> (createFileTree rr >>= mapM Mt.materialize)
+       ft1 <- sortForest <$> (createFileTree lr >>= mapM materialize)
+       ft2 <- sortForest <$> (createFileTree rr >>= mapM materialize)
        assertBool "directories match after join" $ ft1 == ft2
        fromMaybe (return ()) ass)
 
@@ -435,6 +438,73 @@ getFileSize1 = bracket'
        assertEqual "both.txt file size" 5 fs1
        fs2 <- getFileSize "testDir/dir1/both/both_onlyL/both_onlyL.txt"
        assertEqual "both_onlyL.txt file size" 10 fs2)
+
+-- TreeT
+-------------------------------------------------------------------------------
+
+treeTEqual :: Assertion
+treeTEqual = do
+   let w :: Show a => a -> [b] -> IO (a,[b])
+       w x xs = print x >> return (x,xs)
+
+       t1 = TreeT (w 2
+                   [TreeT (w 1 []),
+                    TreeT (w 3 [])])
+
+   putStrLn "-------------"
+   t1' <- materialize t1
+   putStrLn "-------------"
+   t2' <- materialize t1
+   assertEqual "left and right TreeT" t1' t2'
+
+functorTreeTEqual :: Assertion
+functorTreeTEqual = do
+   let w :: Show a => a -> [b] -> IO (a,[b])
+       w x xs = print x >> return (x,xs)
+
+       t1 = TreeT (w 2
+                   [TreeT (w 1 []),
+                    TreeT (w 3 [])])
+       t2 = TreeT (w 3
+                   [TreeT (w 2 []),
+                    TreeT (w 4 [])])
+
+   putStrLn "-------------"
+   t1' <- materialize t2
+   putStrLn "-------------"
+   t2' <- materialize (fmap (+1) t1)
+   assertEqual "left and right TreeT" t1' t2'
+
+apTreeTEqual :: Assertion
+apTreeTEqual = do
+   let w :: Show a => a -> [b] -> IO (a,[b])
+       w x xs = print x >> return (x,xs)
+
+       t1 = TreeT (w 2
+                   [TreeT (w 1 []),
+                    TreeT (w 3 [])])
+       t2 = TreeT (w 10
+                   [TreeT (w 5 []),
+                    TreeT (w 15 [])])
+       t3 = TreeT (w 12
+                   [TreeT (w 7 []),
+                    TreeT (w 17 []),
+                    TreeT (w 11
+                           [TreeT (w 6 []),
+                            TreeT (w 16 [])
+                           ]),
+                    TreeT (w 13
+                           [TreeT (w 8 []),
+                            TreeT (w 18 [])
+                           ])
+                    ])
+
+   putStrLn "-------------"
+   t1' <- materialize $ (+) <$> t1 <*> t2
+   putStrLn "-------------"
+   t2' <- materialize t3
+   assertEqual "left and right TreeT" t1' t2'
+
 
 -- Test data
 -------------------------------------------------------------------------------

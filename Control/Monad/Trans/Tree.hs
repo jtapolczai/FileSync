@@ -40,7 +40,7 @@ instance Applicative m => Applicative (TreeT m) where
             mk (f,fs) (m,ms) = (f m, ch1 ++ ch2)
                where
                   ch1 = map (fmap f) ms
-                  ch2 = map (<*> TreeT (pure (m,ms))) fs
+                  ch2 = map (<*> TreeT m_arg) fs
 
 instance Monad m => Monad (TreeT m) where
    (TreeT m_arg) >>= f = TreeT $ do

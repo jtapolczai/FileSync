@@ -79,6 +79,7 @@ test-suite unit-tests
   main-is:             System/IO/FileSync/Tests.hs
   hs-source-dirs:      tests
   other-modules:       System.IO.FileSync.Tests.Tests
+                       System.IO.FileSync.Tests.TreeT
   default-language:    Haskell2010
   default-extensions:  ScopedTypeVariables,
                        TypeFamilies

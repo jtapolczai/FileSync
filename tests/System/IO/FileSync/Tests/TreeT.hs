@@ -6,7 +6,7 @@ import Test.Hspec
 import Test.Hspec.Contrib.HUnit
 import Test.HUnit
 
-tests = TestList
+tests = TestLabel "treeTTests" $ TestList
    [TestLabel "treeTEqual" $ TestCase treeTEqual,
     TestLabel "functorTreeTEqual" $ TestCase functorTreeTEqual,
     TestLabel "apTreeTEqual" $ TestCase apTreeTEqual,

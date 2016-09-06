@@ -18,7 +18,5 @@ Usage
   ```haskell
      System.IO.FileSync.Sync
   ```
-* [***STATUS: not feature-complete.***]
-  As a standalone executable: `cabal build filesync-cli`.
-  The main module is `System.IO.FileSync.CLI`.
+* As a standalone CLI executable: `cabal build FileSync-exe`.
   

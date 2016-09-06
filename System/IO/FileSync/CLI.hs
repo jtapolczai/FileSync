@@ -5,7 +5,6 @@ module System.IO.FileSync.CLI where
 import Prelude hiding (putStrLn)
 
 import Control.Exception (IOException)
-import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Either
 import Control.Monad.Trans.State
@@ -24,7 +23,7 @@ import System.IO.FileSync.Rename
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 import System.REPL
-import System.REPL.Prompt (putStrLn, prompt)
+import System.REPL.Prompt (putStrLn)
 import System.REPL.Types (PathExistenceType(..))
 
 data AppState = AppState {
@@ -77,9 +76,11 @@ cli = do
                   modify (\s -> s{_appStateConflicts = errs', _appStateLastDirs = Just (src', trg')})
                 (Right diff') -> do
                   let actions = syncForests strat src trg (filterForest filtF diff')
-                  liftIO (actions
-                          Con.=$= askSummaryJoin src trg
-                          Con.$$ performSummaryJoin src trg)
+                  liftIO
+                     (actions
+                      Con.=$= askSummaryJoin src trg
+                      Con.=$= reportSummaryJoin
+                      Con.$$ performSummaryJoin src trg)
                   clearConflicts)
 
       cmdList :: Cmd
@@ -159,9 +160,6 @@ cli = do
          (\t -> return $ case M.lookup (T.strip t) joinStrategies of
                             Nothing -> Left $ genericPredicateError "No strategy by that name."
                             Just s -> Right (t,s))
-
-      unknownCommandHandler :: SomeCommandError -> StateT AppState IO ()
-      unknownCommandHandler _ = liftIO $ putStrLn ("Unknown command.":: String)
 
       otherIOErrorHandler :: IOException -> StateT AppState IO ()
       otherIOErrorHandler _ = liftIO $ putStrLn ("IO exception!" :: String)

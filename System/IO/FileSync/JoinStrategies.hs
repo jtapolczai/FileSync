@@ -14,6 +14,7 @@ module System.IO.FileSync.JoinStrategies (
    -- ** Utility functions for summary joins
    performFileAction,
    askSummaryJoin,
+   reportSummaryJoin,
    performSummaryJoin,
    showFileAction,
    -- ** Handlers for summary joins.
@@ -25,7 +26,10 @@ module System.IO.FileSync.JoinStrategies (
 
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
+import qualified Control.Monad.Trans.State as S
 import qualified Data.Conduit as Con
+import qualified Data.Conduit.Lift as ConLift
 import qualified Data.Conduit.List as ConL
 import qualified Data.Text as T
 import qualified Data.Tree as Tr
@@ -94,16 +98,37 @@ summaryOuterJoin = summaryJoin (return . Just . Copy LeftSide)
 --
 --  Note that this function lists all actions to be done and therefore
 --  pulls them all into memory.
-askSummaryJoin :: LeftRoot -> RightRoot -> Con.Conduit FileAction IO FileAction
+askSummaryJoin :: LeftRoot -> RightRoot -> Con.Conduit FileAction IO (Either Int FileAction)
 askSummaryJoin lr rr = do
    actions <- ConL.consume
-   liftIO $ putStrLn "You are about to perform the following operations:"
+   let total = length actions
+   liftIO $ putStrLn $ "You are about to perform the following " ++ show total ++ "operations:"
    liftIO $ putStrLn $ "Left directory: " ++ getFilePath lr
    liftIO $ putStrLn $ "Right directory: " ++ getFilePath rr
    liftIO $ mapM (putStrLn . showFileAction) actions
    liftIO $ putStrLn "Are you SURE (y/n)?"
    (answer :: YesNo) <- ask' yesNoAsker
-   when (answer == Yes) (mapM_ Con.yield actions)
+   when (answer == Yes) (do Con.yield (Left $ length actions)
+                            mapM_ (Con.yield . Right) actions)
+
+-- |Passes through 'FileAction's unchanged, but prints each to the CLI.
+reportSummaryJoin
+   :: Con.Conduit (Either Int FileAction) IO FileAction
+      -- ^The StateT contains the current and total number of file actions performed.
+reportSummaryJoin = ConLift.evalStateLC (1,0) $ do
+   action <- Con.await
+   case action of
+      Nothing -> return ()
+      -- Left case: we received the number of file actions in total
+      -- and store that in our state.
+      Just (Left total) -> lift $ S.modify (\(c,0) -> (c,total))
+      -- Right (regular) case: we receive, show, and yield a file action.
+      Just (Right action') -> do
+         (cur, total) <- lift S.get
+         let counter = "(" ++ show cur ++ "/" ++ show total ++ ") "
+         lift $ S.put (cur+1,total)
+         liftIO $ putStrLn $ counter ++ showFileAction action'
+         Con.yield action'
 
 -- |Takes a list of 'FileAction's and performs each in succession.
 performSummaryJoin :: LeftRoot -> RightRoot -> Con.Sink FileAction IO ()

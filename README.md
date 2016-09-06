@@ -10,6 +10,7 @@ Features
 * Create a difference report between two directories (or even two sets of directories).
 * Perform inner, left, right, and full outer joins.
 * Use custom strategies: perform all copyings/deletions at once, or ask for confirmation at the end - or write your own!
+* Replicate a master onto multiple slaves.
 
 Usage
 =====

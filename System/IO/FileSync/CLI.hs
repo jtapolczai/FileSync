@@ -58,6 +58,7 @@ cli = do
                   cmdListExcl,
                   cmdRename,
                   cmdDir,
+                  cmdCd,
                   cmdHelp]
 
       cmdSync :: Cmd
@@ -164,10 +165,22 @@ cli = do
 
       cmdDir :: Cmd
       cmdDir = makeCommand
-         ":[d]ir"
-         (flip elem [":d", ":dir"] . T.strip)
+         ":dir"
+         (defCommandTest [":dir"])
          "Prints the current directory."
          (const $ liftIO $ getCurrentDirectory >>= putStrLn)
+
+      cmdCd :: Cmd
+      cmdCd = makeCommand1
+         ":cd"
+         (defCommandTest [":cd"])
+         "Sets the current directory."
+         True
+         (dirAsker "Enter directory: ")
+         (\_ dir -> do
+            liftIO $ setCurrentDirectory dir
+            dir' <- liftIO $ getCurrentDirectory
+            liftIO $ putStrLn ("Current directory set to: \n" ++ dir'))
 
       cmdHelp :: Cmd
       cmdHelp = makeCommand
@@ -175,6 +188,10 @@ cli = do
          (defCommandTest [":h", ":help"])
          "Prints this help text."
          (const $ summarizeCommands commands)
+
+
+      -- Askers
+      -------------------------------------------------------------------------
 
       dirAsker :: MonadIO m => T.Text -> Asker' m FilePath
       dirAsker pr = writableFilepathAsker pr

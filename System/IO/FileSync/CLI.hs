@@ -52,7 +52,13 @@ cli = do
    where
       repl = makeREPLSimple commands
 
-      commands = [cmdSync, cmdList, cmdExcl, cmdListExcl, cmdRename, cmdHelp]
+      commands = [cmdSync,
+                  cmdList,
+                  cmdExcl,
+                  cmdListExcl,
+                  cmdRename,
+                  cmdDir,
+                  cmdHelp]
 
       cmdSync :: Cmd
       cmdSync = makeCommand3
@@ -65,7 +71,7 @@ cli = do
          joinStrategyAsker
          (\_ src' trg' (_,strat) -> do
              exclusions <- _appStateExclusions <$> get
-             curDir <- liftIO $ getCurrentDirectory
+             curDir <- liftIO getCurrentDirectory
              let filtF = not . elem' exclusions . normalise' . _fileTreeDataPath . fst
 
                  elem' set x = if isRelative x
@@ -156,7 +162,12 @@ cli = do
              liftIO $ putStrLn ("Conflicts cleared." :: String)
          )
 
-
+      cmdDir :: Cmd
+      cmdDir = makeCommand
+         ":[d]ir"
+         (flip elem [":d", ":dir"] . T.strip)
+         "Prints the current directory."
+         (const $ liftIO $ getCurrentDirectory >>= putStrLn)
 
       cmdHelp :: Cmd
       cmdHelp = makeCommand

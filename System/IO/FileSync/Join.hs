@@ -3,6 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
+-- |Pure functions for joining trees and handling conflicts. See also
+--  "System.IO.FileSync.Rename".
 module System.IO.FileSync.Join where
 
 import Control.Monad.Writer
@@ -25,7 +27,7 @@ genericJoin
    -> T.Forest a -- ^The right forest T.
    -> T.Forest (St.Set a, TreeDiff) -- ^Joined forest. Values equal according to '=~='
                                     --  but __not__ according to '==' are grouped.
-genericJoin ss ts = 
+genericJoin ss ts =
    map snd . M.toList . fmap recurse . groupChildren $ rawChildren
    where
       rawChildren = map (,LeftOnly) ss ++ map (,RightOnly) ts
@@ -44,7 +46,7 @@ genericJoin ss ts =
       recurse = mkNode . F.foldl' f (St.empty, Nothing, S.empty, S.empty)
          where
             mkNode (x, side, ls, rs) =
-               T.Node (x, fromMaybe (error "genericJoin.recurse: empty equivalence class!") side) $ genericJoin (F.toList ls) (F.toList rs) 
+               T.Node (x, fromMaybe (error "genericJoin.recurse: empty equivalence class!") side) $ genericJoin (F.toList ls) (F.toList rs)
 
             f (vals, accSide, ls, rs) (T.Node x xs, side) =
                (St.insert x vals,

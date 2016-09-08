@@ -4,6 +4,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
+-- |Various join strategies. The basic joins are of the 'summaryJoin' family.
+--  These can be augmented with the @overwriteWith*@ difference handlers.
 module System.IO.FileSync.JoinStrategies (
    -- * Summary joins
    summaryJoin,
@@ -24,7 +26,6 @@ module System.IO.FileSync.JoinStrategies (
    overwriteWithRight,
    ) where
 
-import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import qualified Control.Monad.Trans.State as S
@@ -43,7 +44,7 @@ import System.IO.FileSync.IO
 
 -- import Debug.Trace
 
-pattern JNode fp side <- Tr.Node (FTD fp _, side) _
+pattern JNode fp side <- Tr.Node (FTD fp _, side) _typ
 
 -- Summary joins
 -------------------------------------------------------------------------------
@@ -65,7 +66,7 @@ summaryJoin lA rA bA _ _ path (JNode fp diff) = do
    {- traceM $ "[summaryJoin] act: " ++ show act -}
    case act of
       Nothing -> return Yes
-      Just act' -> {- trace ("[summaryJoin] yield: " ++ show act') -} (Con.yield act') >> return No
+      Just act' -> Con.yield act' >> return No
 summaryJoin _ _ _ _ _ _ _ = error "summaryJoin: pattern match failure. This should never happen."
 
 -- |Left join. See 'summaryJoin'.
@@ -102,28 +103,30 @@ askSummaryJoin :: LeftRoot -> RightRoot -> Con.Conduit FileAction IO (Either Int
 askSummaryJoin lr rr = do
    actions <- ConL.consume
    let total = length actions
-   liftIO $ putStrLn $ "You are about to perform the following " ++ show total ++ "operations:"
+   liftIO $ putStrLn $ "You are about to perform the following " ++ show total ++ " operations:"
    liftIO $ putStrLn $ "Left directory: " ++ getFilePath lr
    liftIO $ putStrLn $ "Right directory: " ++ getFilePath rr
    liftIO $ mapM (putStrLn . showFileAction) actions
-   liftIO $ putStrLn "Are you SURE (y/n)?"
    (answer :: YesNo) <- ask' yesNoAsker
-   when (answer == Yes) (do Con.yield (Left $ length actions)
-                            mapM_ (Con.yield . Right) actions)
+   if answer == Yes
+   then do
+      liftIO $ putStrLn "Performing actions..."
+      Con.yield (Left $ length actions)
+      mapM_ (Con.yield . Right) actions
+   else
+      liftIO $ putStrLn "Doing nothing."
 
 -- |Passes through 'FileAction's unchanged, but prints each to the CLI.
 reportSummaryJoin
    :: Con.Conduit (Either Int FileAction) IO FileAction
       -- ^The StateT contains the current and total number of file actions performed.
 reportSummaryJoin = ConLift.evalStateLC (1,0) $ do
-   action <- Con.await
-   case action of
-      Nothing -> return ()
+   Con.awaitForever $ \action -> case action of
       -- Left case: we received the number of file actions in total
       -- and store that in our state.
-      Just (Left total) -> lift $ S.modify (\(c,0) -> (c,total))
+      Left total -> lift $ S.modify (\(c,0) -> (c,total))
       -- Right (regular) case: we receive, show, and yield a file action.
-      Just (Right action') -> do
+      Right action' -> do
          (cur, total) <- lift S.get
          let counter = "(" ++ show cur ++ "/" ++ show total ++ ") "
          lift $ S.put (cur+1,total)
@@ -132,12 +135,16 @@ reportSummaryJoin = ConLift.evalStateLC (1,0) $ do
 
 -- |Takes a list of 'FileAction's and performs each in succession.
 performSummaryJoin :: LeftRoot -> RightRoot -> Con.Sink FileAction IO ()
-performSummaryJoin left right = {- trace "[performSummaryJoin]" $ -} do
-   Con.awaitForever (\a -> {- trace ("[performSummaryJoin]_ " ++ showFileAction a) $ -} liftIO $ performFileAction left right a)
+performSummaryJoin left right = do
+   action <- Con.await
+   case action of
+      Nothing -> liftIO $ putStrLn "Done."
+      Just a -> do liftIO $ performFileAction left right a
+                   performSummaryJoin left right
 
 yesNoAsker :: Monad m => Asker m T.Text YesNo
 yesNoAsker = predAsker
-   "Perform these actions (y/n)?"
+   "Perform these actions (y/n)? "
    (\t -> return $ if elem (T.strip t) ["y","Y"] then Right Yes
                    else if elem (T.strip t) ["n","N"] then Right No
                    else Left $ genericPredicateError "Expected y/n.")
@@ -150,10 +157,10 @@ yesNoAsker = predAsker
 --  1. "Delete from left": "D L"
 --  1. "Delete from right": "D R"
 showFileAction :: FileAction -> String
-showFileAction (Copy LeftSide fp) =    "C -->:" ++ fp
-showFileAction (Copy RightSide fp) =   "C <--:" ++ fp
-showFileAction (Delete LeftSide fp) =  "D L:  " ++ fp
-showFileAction (Delete RightSide fp) = "D R:  " ++ fp
+showFileAction (Copy LeftSide fp) =    "C -->: " ++ fp
+showFileAction (Copy RightSide fp) =   "C <--: " ++ fp
+showFileAction (Delete LeftSide fp) =  "D L:   " ++ fp
+showFileAction (Delete RightSide fp) = "D R:   " ++ fp
 
 -- |Performs a 'FileAction' (copying or deleting a file/directory).
 --  Uses 'applyDeleteAction' and 'applyInsertAction'.
@@ -236,7 +243,7 @@ overwriteWithRight (RR root) fp = do
 --  The path to remove is given by @S </> P@.
 applyDeleteAction
    :: FileRoot src
-   => src -- |Root S of the source.
+   => src -- ^Root S of the source.
    -> FilePath -- ^Path P in the tree, starting from the root.
    -> IO ()
 applyDeleteAction src path =
@@ -254,8 +261,8 @@ applyDeleteAction src path =
 --  by @T </> P@.
 applyInsertAction
    :: (FileRoot src, FileRoot trg)
-   => src -- |Root S of the source.
-   -> trg -- |Root T of the target.
+   => src -- ^Root S of the source.
+   -> trg -- ^Root T of the target.
    -> FilePath -- ^Path P in the tree, starting from the roots.
    -> IO ()
 applyInsertAction src trg path =

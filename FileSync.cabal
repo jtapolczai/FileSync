@@ -5,6 +5,8 @@ name:                FileSync
 version:             0.2.0.0
 synopsis:            Synchronize directories with various join strategies.
 description:         Have you ever had two huge directories with maybe 50 files of difference between them that you wanted to synchronize? I sure have! Here is a program that does just that: you pass it two directories and it synchronizes them in whatever way you desire: write only from the left to the right, write from the right to the left, copy into both directions, delete all non-common files, do some custom action based on hash or modification date in the case of files present in both places, etc.
+                     The "main" module of the package is "System.IO.FileSync.Sync", which contains the functions for actually performing a synchronization of directories using some join strategy. Pre-made join strategies are found in "System.IO.FileSync.JoinStrategies".
+
 license:             Apache-2.0
 license-file:        LICENSE
 author:              Janos Tapolczai
@@ -49,6 +51,7 @@ library
                        exceptions >=0.8 && <1,
                        filepath >=1.4 && <2,
                        functor-monadic >=0.1 && <1,
+                       hashmap >= 1.3 && <1.5,
                        hspec >=2.2 && <3,
                        hspec-contrib >=0.3 && <1,
                        HUnit >=1.3 && <2,
@@ -79,8 +82,9 @@ test-suite unit-tests
   type:                exitcode-stdio-1.0
   main-is:             System/IO/FileSync/Tests.hs
   hs-source-dirs:      tests
-  other-modules:       System.IO.FileSync.Tests.Tests
-                       System.IO.FileSync.Tests.TreeT
+  other-modules:       System.IO.FileSync.Tests.Join,
+                       System.IO.FileSync.Tests.Tests,
+                       System.IO.FileSync.Tests.Tree
   default-language:    Haskell2010
   default-extensions:  ScopedTypeVariables,
                        TypeFamilies

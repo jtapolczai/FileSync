@@ -3,6 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
+-- |The "core module" of the package, containing the functions for actually
+--  syncing directories.
 module System.IO.FileSync.Sync where
 
 import Control.Monad.Trans.Either
@@ -20,6 +22,8 @@ import qualified System.IO.Error as Err
 
 import System.IO.FileSync.Join
 import System.IO.FileSync.Types
+
+import Debug.Trace
 
 -- import Debug.Trace
 
@@ -81,19 +85,29 @@ createDiffTree src trg = do
 --  using a given strategy. The tree's root should be an immediate child of
 --  either the source or the target.
 syncTrees
-   :: JoinStrategy b
+   :: forall b.JoinStrategy b
    -> LeftRoot
    -> RightRoot
    -> T.Tree (FileTreeData, TreeDiff)
    -> Con.Source IO b
 syncTrees strategy src trg = go ""
    where
-      throughput [] = return Yes
-      throughput (Right x:xs) = Con.yield x >> throughput xs
-      throughput (Left x:_) = {- trace ("[syncTrees.throughput]" ++ show x) $ -} return x
+      partitionActions :: [Either Continue b] -> [b] -> ([b], Continue)
+      partitionActions (Right x:xs) a = partitionActions xs (a++[x])
+      partitionActions (Left x:_) a = (a, x)
+      partitionActions [] a = (a, Yes)
 
+      yieldAll :: [b] -> Con.Source IO b
+      yieldAll (x:xs) = Con.yield x >> yieldAll xs
+      yieldAll [] = return ()
+
+      go :: FilePath -> T.Tree (FileTreeData, TreeDiff) -> Con.Source IO b
       go path node@(T.Node (FTD x _,_) xs) = do
+         traceM "running strategy..."
          continue <- strategy src trg path node
+         -- traceM $ "actions: " ++ show (length actions)
+         -- let (actions', continue) = partitionActions actions []
+         -- yieldAll actions'
          when (continue == Yes) $ mapM_ (go $ path </> x) xs
 
 -- |See 'syncTrees'. Works with forests.
@@ -103,7 +117,7 @@ syncForests
    -> RightRoot
    -> T.Forest (FileTreeData, TreeDiff)
    -> Con.Source IO b
-syncForests strategy src trg = mapM_ (syncTrees strategy src trg)
+syncForests strategy src trg xs = trace ("[syncForests]" ++ show (length xs)) $ mapM_ (syncTrees strategy src trg) xs
 
 -- |Takes two directories and synchronizes them using a given join
 --  strategy. Everything said about 'syncTrees' applies.

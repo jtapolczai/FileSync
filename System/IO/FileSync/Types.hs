@@ -4,6 +4,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
+-- |Contains all the types needed by the rest of the package.
 module System.IO.FileSync.Types where
 
 import Control.Exception
@@ -43,9 +44,11 @@ class Eq a => LooseEq a where
 -- |A collection of equivalence classes, with each class represented by a single element.
 type EqClasses k v = M.Map k (S.Seq v)
 
+-- |Indicates where a node is present on a difference tree.
 data TreeDiff = LeftOnly | RightOnly | Both
    deriving (Show, Eq, Ord, Read)
 
+-- |Node data for file trees.
 data FileTreeData = FTD
    {_fileTreeDataPath :: FilePath,
     _fileTreeDataType :: EntryType
@@ -60,15 +63,19 @@ instance LooseEq FileTreeData where
    type Reduct FileTreeData = FilePath
    reduct (FTD fp _) = fp
 
+-- |Indicates the kind of filesystem object.
 data EntryType = Directory | File
    deriving (Show, Eq, Ord, Read)
 
+-- |The left root path.
 newtype LeftRoot = LR FilePath
    deriving (Show, Eq, Ord)
 
+-- |The right root path.
 newtype RightRoot = RR FilePath
    deriving (Show, Eq, Ord)
 
+-- |Class of filepaths that are roots.
 class FileRoot a where
    getFilePath :: a -> FilePath
 
@@ -85,11 +92,15 @@ type JoinStrategy a =
    -> T.Tree (FileTreeData, TreeDiff)
    -> Con.ConduitM () a IO Continue
 
+-- |A difference handler for filepaths that are present in multiple locations.
+--  These can optionally produce 'FileAction' or do nothing.
 type DifferenceHandler = FilePath -> IO (Maybe FileAction)
 
+-- |Left/right indicator for path roots.
 data RootSide = LeftSide | RightSide
    deriving (Show, Eq, Ord, Enum, Bounded, Read)
 
+-- |A syncing action to be taken. Either delete one side or copy over from one.
 data FileAction = Delete RootSide FilePath | Copy RootSide FilePath
    deriving (Show, Eq, Ord, Read)
 

@@ -1,3 +1,4 @@
+-- |Utility functions for STM.
 module System.IO.FileSync.STM.Utils where
 
 import Control.Concurrent (forkIO)

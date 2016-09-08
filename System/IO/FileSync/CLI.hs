@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |The command-line interface for the executable.
 module System.IO.FileSync.CLI where
 
 import Prelude hiding (putStrLn)
@@ -10,12 +11,14 @@ import Control.Monad.Trans.Either
 import Control.Monad.Trans.State
 import qualified Data.Conduit as Con
 import qualified Data.Foldable as F
+import qualified Data.HashSet as HS
 import Data.Functor.Monadic
 import qualified Data.Map as M
 import Data.Maybe
 import Data.Monoid
 import qualified Data.Set as St
 import qualified Data.Text as T
+import System.Directory
 import System.FilePath
 import System.IO.FileSync.Join
 import System.IO.FileSync.JoinStrategies
@@ -26,14 +29,18 @@ import System.REPL
 import System.REPL.Prompt (putStrLn)
 import System.REPL.Types (PathExistenceType(..))
 
+import Debug.Trace
+
+-- |The CLI's app state.
 data AppState = AppState {
-   _appStateExclusions :: [FilePath],
+   _appStateExclusions :: HS.Set FilePath,
    _appStateLastDirs :: Maybe (FilePath, FilePath),
    _appStateConflicts :: [FilePath]
    }
 
 type Cmd = Command (StateT AppState IO) T.Text ()
 
+-- |Main command-line interface, in REPL-form.
 cli :: IO ()
 cli = do
    putStrLn ("FileSync v0.2" :: T.Text)
@@ -41,7 +48,7 @@ cli = do
    putStrLn ("Enter :h or :help for a list of commands." :: T.Text)
    putStrLn ("Enter :exit to exit the program." :: T.Text)
    putStrLn ("" :: T.Text)
-   evalStateT repl (AppState [] Nothing [])
+   evalStateT repl (AppState (HS.empty) Nothing [])
    where
       repl = makeREPLSimple commands
 
@@ -58,7 +65,13 @@ cli = do
          joinStrategyAsker
          (\_ src' trg' (_,strat) -> do
              exclusions <- _appStateExclusions <$> get
-             let filtF = flip elem exclusions . normalise . _fileTreeDataPath . fst
+             curDir <- liftIO $ getCurrentDirectory
+             let filtF = not . elem' exclusions . normalise' . _fileTreeDataPath . fst
+
+                 elem' set x = if isRelative x
+                                  then HS.member (normalise' $ curDir </> x) set
+                                  else HS.member x set
+
                  src = LR src'
                  trg = RR trg'
              diff <- liftIO $ runEitherT (createDiffTree src trg)
@@ -76,9 +89,10 @@ cli = do
                   modify (\s -> s{_appStateConflicts = errs', _appStateLastDirs = Just (src', trg')})
                 (Right diff') -> do
                   let actions = syncForests strat src trg (filterForest filtF diff')
+
                   liftIO
                      (actions
-                      Con.=$= askSummaryJoin src trg
+                      Con.$= askSummaryJoin src trg
                       Con.=$= reportSummaryJoin
                       Con.$$ performSummaryJoin src trg)
                   clearConflicts)
@@ -98,8 +112,9 @@ cli = do
          True
          (existentFileAsker "Enter exlusions file: ")
          (\_ fp -> do
-            excl <- liftIO (readFile fp) >$> (map normalise . lines)
-            modify (\s -> s{_appStateExclusions=excl}))
+            excl <- liftIO (readFile fp >$> lines >$> map normalise' >$> HS.fromList)
+            modify (\s -> s{_appStateExclusions=excl})
+            liftIO $ putStrLn ("Read the list of exclusions." :: String))
 
       cmdRename :: Cmd
       cmdRename = makeCommand2
@@ -127,6 +142,7 @@ cli = do
              renamings <- liftIO $ renameConflicts [LR src, LR trg] conflicts
              liftIO $ mapM_ (\(r, o, n) -> putStrLn $ (r </> o) ++ " renamed to " ++ n) renamings
              clearConflicts
+             liftIO $ putStrLn ("Conflicts cleared." :: String)
          )
 
 
@@ -175,3 +191,9 @@ joinStrategies = M.fromList
 -- |Clears the conflicts and the last dirs fields of the app state.
 clearConflicts :: StateT AppState IO ()
 clearConflicts = modify (\s -> s{_appStateConflicts = [], _appStateLastDirs = Nothing})
+
+normalise' :: FilePath -> FilePath
+normalise' = map (replace '\\' '/') . normalise
+   where
+      replace x y z | x == z = y
+                    | otherwise = x

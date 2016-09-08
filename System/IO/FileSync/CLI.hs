@@ -52,7 +52,7 @@ cli = do
    where
       repl = makeREPLSimple commands
 
-      commands = [cmdSync, cmdList, cmdExcl, cmdRename, cmdHelp]
+      commands = [cmdSync, cmdList, cmdExcl, cmdListExcl, cmdRename, cmdHelp]
 
       cmdSync :: Cmd
       cmdSync = makeCommand3
@@ -115,6 +115,17 @@ cli = do
             excl <- liftIO (readFile fp >$> lines >$> map normalise' >$> HS.fromList)
             modify (\s -> s{_appStateExclusions=excl})
             liftIO $ putStrLn ("Read the list of exclusions." :: String))
+
+      cmdListExcl :: Cmd
+      cmdListExcl = makeCommand
+         ":listExclusions (:[xl])"
+         (defCommandTest [":listExclusions", ":xl"])
+         "Lists the current exclusions."
+         (\_ -> do
+            excl <- _appStateExclusions <$> get
+            if HS.null excl
+            then liftIO $ putStrLn ("There are no exclusions." :: String)
+            else liftIO $ mapM_ putStrLn (HS.toList excl))
 
       cmdRename :: Cmd
       cmdRename = makeCommand2
@@ -196,4 +207,4 @@ normalise' :: FilePath -> FilePath
 normalise' = map (replace '\\' '/') . normalise
    where
       replace x y z | x == z = y
-                    | otherwise = x
+                    | otherwise = z

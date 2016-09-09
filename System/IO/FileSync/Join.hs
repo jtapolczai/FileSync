@@ -60,6 +60,27 @@ filterForest pred = map filterForest' . filter (pred . T.rootLabel)
    where
       filterForest' (T.Node x xs) = T.Node x $ filterForest pred xs
 
+-- |Descends into the forest and filters out all sub-trees whose roots fail
+--  a predicate. The predicate has access to an accumulating parameter along
+--  the way.
+filterAccumForest
+   :: (a -> b -> (Maybe b, Bool))
+      -- ^Predicate. Takes a node values and an accumulator and produces the
+      --  "keep?"-value plus the new accumulator. If the accumulator is 'Nothing',
+      --  the filtering along that subtree is stopped (and the sub-trees are kept).
+   -> b -- ^Initial value of the accumulator.
+   -> T.Forest a
+   -> T.Forest a
+filterAccumForest f accum = mapMaybe (go accum)
+   where
+      go acc (T.Node x xs) = case (keep, acc') of
+            (True, Just acc'') -> Just $ T.Node x (filterAccumForest f acc'' xs)
+            (False, Just _) -> Nothing
+            (True, Nothing) -> Just $ T.Node x xs
+            (False, Nothing) -> Nothing
+         where
+            (acc',keep) = f x acc
+
 -- |Applies a function to every node of a forest.
 --
 --  Use cases:

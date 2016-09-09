@@ -73,11 +73,9 @@ cli = do
          (\_ src' trg' (_,strat) -> do
              exclusions <- _appStateExclusions <$> get
              curDir <- liftIO getCurrentDirectory
-             let filtF = not . elem' exclusions . normalise' . _fileTreeDataPath . fst
-
-                 elem' set x = if isRelative x
-                                  then HS.member (normalise' $ curDir </> x) set
-                                  else HS.member x set
+             let filtF (FTD{_fileTreeDataPath=ftd,_) parents =
+                    -- set this to nothing if case 4 occurs
+                    (Just (parents </> ftd), not $ isSubpathOf (parents </> ftd) exclusions)
 
                  src = LR src'
                  trg = RR trg'
@@ -95,7 +93,14 @@ cli = do
                   liftIO $ putStrLn ("Use ':rename' to rename the conflicting files." :: String)
                   modify (\s -> s{_appStateConflicts = errs', _appStateLastDirs = Just (src', trg')})
                 (Right diff') -> do
-                  let actions = syncForests strat src trg (filterForest filtF diff')
+                  let actions = syncForests
+                                   strat
+                                   src
+                                   trg
+                                   (filterAccumForest filtF "" diff')
+
+                  traceM $ show exclusions
+                  traceM $ show $ filterForest filtF diff'
 
                   liftIO
                      (actions
@@ -188,6 +193,9 @@ cli = do
          (defCommandTest [":h", ":help"])
          "Prints this help text."
          (const $ summarizeCommands commands)
+
+      isSubpathOf :: FilePath -> HS.Set FilePath -> Bool
+      isSubpathOf -- get all prefixes with takedirectory
 
 
       -- Askers

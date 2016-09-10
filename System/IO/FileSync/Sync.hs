@@ -5,12 +5,22 @@
 
 -- |The "core module" of the package, containing the functions for actually
 --  syncing directories.
-module System.IO.FileSync.Sync where
+module System.IO.FileSync.Sync (
+   createFileTree,
+   createDiffTree,
+   syncTrees,
+   syncForests,
+   syncDirectories,
+   filterExclusions,
+   insertST,
+   ) where
 
 import Control.Monad.Trans.Either
 import Control.Monad.Trans.Tree as Mt
 import Control.Monad.Writer
 import qualified Data.Conduit as Con
+import Data.Hashable (Hashable(..))
+import qualified Data.HashMap as HM
 import Data.List
 import Data.Ord
 import qualified Data.Foldable as F
@@ -136,3 +146,36 @@ sortForest :: Ord a => T.Forest a -> T.Forest a
 sortForest = sortBy (comparing T.rootLabel) . map sortTree
    where
       sortTree (T.Node x xs) = T.Node x (sortForest xs)
+
+
+-- |Takes a collection of exclusions and filters a forest accordingly.
+filterExclusions
+   :: FileRoot r
+   => r -- ^Root of the forest.
+   -> Exclusions -- ^Collection of excluded filepaths.
+   -> [Mt.TreeT IO FileTreeData] -- ^Forest to be filtered.
+   -> [Mt.TreeT IO FileTreeData]
+filterExclusions excl ts = undefined
+
+-- |Creates a collection of exclusions from a list of 'FilePath's.
+makeExclusions :: [FilePath] -> Exclusions
+makeExclusions = foldl' f (SearchNode False HM.empty)
+   where
+      f tree fp = insertST (segment $ normalise fp) tree
+      segment = splitPath
+
+-- |Inserts a segmented key into a 'SearchTree'.
+insertST :: (Hashable a, Ord a) => [a] -> SearchTree a -> SearchTree a
+insertST [] s = s
+insertST (x:xs) (SearchNode terminal ss) =
+   if HM.member x ss
+   then SearchNode terminal $ HM.adjust (insertST xs) x ss
+   else SearchNode terminal $ HM.insert x (insertST xs $ SearchNode (null xs) HM.empty) ss
+
+-- |Returns True iff the key or any prefix of it is a member of a 'SearchTree'.
+memberST :: (Hashable a, Ord a) => [a] -> SearchTree a -> Bool
+memberST [] (SearchNode t _) = t
+memberST _ (SearchNode True ss) = True
+memberST (x:xs) (SearchNode _ ss) =
+   if HM.member x ss then memberST xs (ss HM.! x)
+   else False

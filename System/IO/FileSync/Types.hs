@@ -10,6 +10,7 @@ module System.IO.FileSync.Types where
 import Control.Exception
 import Data.Char
 import qualified Data.Conduit as Con
+import qualified Data.HashMap as HM
 import qualified Data.Map as M
 import qualified Data.Sequence as S
 import qualified Data.Tree as T
@@ -120,6 +121,15 @@ instance Read YesNo where
                                   ('Y', Yes),
                                   ('n', No),
                                   ('N', No)]
+
+-- Exclusions
+-------------------------------------------------------------------------------
+
+-- |A structured collection of excluded files and directories.
+type Exclusions = SearchTree FilePath
+
+-- |Search tree in which child nodes are stored in hashmaps.
+data SearchTree a = SearchNode Bool (HM.Map a (SearchTree a))
 
 -- Exceptions
 -------------------------------------------------------------------------------

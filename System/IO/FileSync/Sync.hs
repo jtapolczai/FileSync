@@ -150,12 +150,17 @@ sortForest = sortBy (comparing T.rootLabel) . map sortTree
 
 -- |Takes a collection of exclusions and filters a forest accordingly.
 filterExclusions
-   :: FileRoot r
+   :: (Monad m, FileRoot r)
    => r -- ^Root of the forest.
    -> Exclusions -- ^Collection of excluded filepaths.
-   -> [Mt.TreeT IO FileTreeData] -- ^Forest to be filtered.
-   -> [Mt.TreeT IO FileTreeData]
-filterExclusions excl ts = undefined
+   -> [Mt.TreeT m FileTreeData] -- ^Forest to be filtered.
+   -> m [Mt.TreeT m FileTreeData]
+filterExclusions r excl = Mt.filterAccumForestT f acc
+   where
+      f ftd acc' = undefined
+      acc = undefined
+
+
 
 -- |Creates a collection of exclusions from a list of 'FilePath's.
 makeExclusions :: [FilePath] -> Exclusions

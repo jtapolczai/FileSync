@@ -15,12 +15,10 @@ module Control.Monad.Trans.Tree (
    leaves,
    justLeaves,
    traverseM,
-   filterAccumForestT,
    ) where
 
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import qualified Data.Tree as T
 
@@ -154,31 +152,3 @@ traverseM f st (TreeT m) = TreeT $ do
 justLeaves :: (n -> a) -> T.Tree n -> [a]
 justLeaves f = leaves (const f) undefined undefined
 
--- |Descends into the forest and filters out all sub-trees whose roots fail
---  a predicate. The predicate has access to an accumulating parameter along
---  the way.
-filterAccumForestT
-   :: Monad m
-   => (a -> b -> m (Maybe b, Bool))
-      -- ^Predicate. Takes a node values and an accumulator and produces the
-      --  "keep?"-value plus the new accumulator. If the accumulator is 'Nothing',
-      --  the filtering along that subtree is stopped (and the sub-trees are kept).
-   -> b -- ^Initial value of the accumulator.
-   -> [TreeT m a]
-   -> m [TreeT m a]
-filterAccumForestT f accum = mapMaybeM (go accum)
-   where
-      -- go :: a -> b -> m (Maybe (TreeT m a))
-      go acc (TreeT m) = do
-         (n,ns) <- m
-         res <- f n acc
-         case res of
-            (Just acc', True) -> do
-               ns' <- filterAccumForestT f acc' ns
-               return $ Just $ TreeT $ return (n, ns')
-            (Just _, False) -> return Nothing
-            (Nothing, True) -> return $ Just $ TreeT $ return (n,ns)
-            (Nothing, False) -> return Nothing
-
-mapMaybeM :: (Monad m) => (a -> m (Maybe b)) -> [a] -> m [b]
-mapMaybeM f xs = catMaybes <$> mapM f xs

@@ -131,6 +131,10 @@ type Exclusions = SearchTree FilePath
 -- |Search tree in which child nodes are stored in hashmaps.
 data SearchTree a = SearchNode Bool (HM.Map a (SearchTree a))
 
+-- |An action to be taken when filtering a forest.
+data SearchAction = Exclude | KeepAndStop | KeepAndContinue
+   deriving (Show, Eq, Ord, Enum)
+
 -- Exceptions
 -------------------------------------------------------------------------------
 

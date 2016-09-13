@@ -19,11 +19,12 @@ import Control.Monad.Trans.Either
 import Control.Monad.Trans.Tree as Mt
 import Control.Monad.Writer
 import qualified Data.Conduit as Con
+import qualified Data.Foldable as F
 import Data.Hashable (Hashable(..))
 import qualified Data.HashMap as HM
 import Data.List
+import Data.Maybe (catMaybes)
 import Data.Ord
-import qualified Data.Foldable as F
 import qualified Data.Sequence as S
 import qualified Data.Tree as T
 import System.Directory
@@ -155,11 +156,17 @@ filterExclusions
    -> Exclusions -- ^Collection of excluded filepaths.
    -> [Mt.TreeT m FileTreeData] -- ^Forest to be filtered.
    -> m [Mt.TreeT m FileTreeData]
-filterExclusions r excl = Mt.filterAccumForestT f acc
+filterExclusions r excl = filterAccumForestT f acc
    where
-      f ftd acc' = undefined
-      acc = undefined
-
+      f FTD{_fileTreeDataPath=path} acc' = return $ (path', act)
+         where
+            path' = acc' ++ [path]
+            act = if prefixMemberST path' excl
+                  then Exclude
+                  else if potentialMemberST path' excl
+                  then KeepAndContinue
+                  else KeepAndStop
+      acc = []
 
 
 -- |Creates a collection of exclusions from a list of 'FilePath's.
@@ -178,9 +185,44 @@ insertST (x:xs) (SearchNode terminal ss) =
    else SearchNode terminal $ HM.insert x (insertST xs $ SearchNode (null xs) HM.empty) ss
 
 -- |Returns True iff the key or any prefix of it is a member of a 'SearchTree'.
-memberST :: (Hashable a, Ord a) => [a] -> SearchTree a -> Bool
-memberST [] (SearchNode t _) = t
-memberST _ (SearchNode True ss) = True
-memberST (x:xs) (SearchNode _ ss) =
-   if HM.member x ss then memberST xs (ss HM.! x)
+prefixMemberST :: (Hashable a, Ord a) => [a] -> SearchTree a -> Bool
+prefixMemberST [] (SearchNode t _) = t
+prefixMemberST _ (SearchNode True ss) = True
+prefixMemberST (x:xs) (SearchNode False ss) =
+   if HM.member x ss then prefixMemberST xs (ss HM.! x)
    else False
+
+-- |Returns True iff a key occurs as a path in a 'SearchTree'.
+potentialMemberST :: (Hashable a, Ord a) => [a] -> SearchTree a -> Bool
+potentialMemberST [] (SearchNode t _) = not t
+potentialMemberST (x:xs) (SearchNode _ ss) =
+   if HM.member x ss then potentialMemberST xs (ss HM.! x)
+   else False
+
+-- |Descends into the forest and filters out all sub-trees whose roots fail
+--  a predicate. The predicate has access to an accumulating parameter along
+--  the way.
+filterAccumForestT
+   :: Monad m
+   => (a -> b -> m (b, SearchAction))
+      -- ^Predicate. Takes a node values and an accumulator and produces the
+      --  "keep?"-value plus the new accumulator. If the accumulator is 'Nothing',
+      --  the filtering along that subtree is stopped (and the sub-trees are kept).
+   -> b -- ^Initial value of the accumulator.
+   -> [Mt.TreeT m a]
+   -> m [Mt.TreeT m a]
+filterAccumForestT f accum = mapMaybeM (go accum)
+   where
+      -- go :: a -> b -> m (Maybe (TreeT m a))
+      go acc (Mt.TreeT m) = do
+         (n,ns) <- m
+         res <- f n acc
+         case res of
+            (acc', KeepAndContinue) -> do
+               ns' <- filterAccumForestT f acc' ns
+               return $ Just $ TreeT $ return (n, ns')
+            (_, KeepAndStop) -> return $ Just $ TreeT $ return (n,ns)
+            (_, Exclude) -> return Nothing
+
+mapMaybeM :: (Monad m) => (a -> m (Maybe b)) -> [a] -> m [b]
+mapMaybeM f xs = catMaybes <$> mapM f xs

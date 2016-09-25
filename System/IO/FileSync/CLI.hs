@@ -45,7 +45,7 @@ cli = do
    where
       repl = makeREPLSimple commands
 
-      commands = [cmdSync, cmdList, cmdExcl, cmdRename, cmdHelp]
+      commands = [cmdSync, cmdList, {- cmdExcl, -} cmdRename, cmdHelp]
 
       cmdSync :: Cmd
       cmdSync = makeCommand3

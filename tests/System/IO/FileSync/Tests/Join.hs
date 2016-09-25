@@ -38,7 +38,8 @@ tests = TestLabel "joinTests" $ TestList
     TestLabel "performSummaryJoinR1" $ TestCase performSummaryJoinR1,
     TestLabel "performSummaryJoinI1" $ TestCase performSummaryJoinI1,
     TestLabel "performSummaryJoinO1" $ TestCase performSummaryJoinO1,
-    TestLabel "getFileSize1" $ TestCase getFileSize1
+    TestLabel "getFileSize1" $ TestCase getFileSize1,
+    TestLabel "filterForest1" $ TestCase filterForest1
     ]
 
 -- Summary join
@@ -277,3 +278,20 @@ getFileSize1 = bracket'
        assertEqual "both.txt file size" 5 fs1
        fs2 <- getFileSize "testDir/dir1/both/both_onlyL/both_onlyL.txt"
        assertEqual "both_onlyL.txt file size" 10 fs2)
+
+-- Filter forest
+-------------------------------------------------------------------------------
+
+filterForest1 :: Assertion
+filterForest1 = bracket'
+   (testDirsL)
+   (rmD "testDir")
+   (do res <- runEitherT $ syncDirectories strategy lr rr
+       assertBool "synDirectories must be successful" (isRight res)
+       fromRight res Con.$$ performSummaryJoin lr rr
+       let dt' = map (fmap fst) $ filterForest (okElems . snd) dt1
+       dirsMatch <- directoryStructureMatches "testDir/dir1" dt'
+       assertBool "join performed" dirsMatch
+       ft1 <- sortForest <$> (createFileTree lr >>= mapM materialize)
+       ft2 <- sortForest <$> (createFileTree rr >>= mapM materialize)
+       assertBool "directories match after join" $ ft1 == ft2)

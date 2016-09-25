@@ -154,13 +154,14 @@ filterExclusions
    :: (Monad m, FileRoot r)
    => r -- ^Root of the forest.
    -> Exclusions -- ^Collection of excluded filepaths.
-   -> [Mt.TreeT m FileTreeData] -- ^Forest to be filtered.
-   -> m [Mt.TreeT m FileTreeData]
-filterExclusions r excl = filterAccumForestT f acc
+   -> (a -> FilePath) -- ^Getter for the 'FilterTreeData' in the trees' nodes.
+   -> [Mt.TreeT m a] -- ^Forest to be filtered.
+   -> m [Mt.TreeT m a]
+filterExclusions r excl get = filterAccumForestT f acc
    where
-      f FTD{_fileTreeDataPath=path} acc' = return $ (path', act)
+      f x acc' = return $ (path', act)
          where
-            path' = acc' ++ [path]
+            path' = acc' ++ [get x]
             act = if prefixMemberST path' excl
                   then Exclude
                   else if potentialMemberST path' excl
@@ -192,11 +193,19 @@ prefixMemberST (x:xs) (SearchNode False ss) =
    if HM.member x ss then prefixMemberST xs (ss HM.! x)
    else False
 
--- |Returns True iff a key occurs as a path in a 'SearchTree'.
+-- |Returns True iff a key occurs as a path in a 'SearchTree', but isn't itself
+--  a member (i.e. it occurs as a non-terminal prefix of a member).
 potentialMemberST :: (Hashable a, Ord a) => [a] -> SearchTree a -> Bool
 potentialMemberST [] (SearchNode t _) = not t
 potentialMemberST (x:xs) (SearchNode _ ss) =
    if HM.member x ss then potentialMemberST xs (ss HM.! x)
+   else False
+
+-- |Returns True iff a key occurs in a 'SearchTree'.
+exactMemberST :: (Hashable a, Ord a) => [a] -> SearchTree a -> Bool
+exactMemberST [] (SearchNode t _) = t
+exactMemberST (x:xs) (SearchNode False ss) =
+   if HM.member x ss then prefixMemberST xs (ss HM.! x)
    else False
 
 -- |Descends into the forest and filters out all sub-trees whose roots fail

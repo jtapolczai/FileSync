@@ -54,8 +54,8 @@ cli = do
 
       commands = [cmdSync,
                   cmdList,
-                  cmdExcl,
-                  cmdListExcl,
+                  {- cmdExcl,
+                  cmdListExcl,-}
                   cmdRename,
                   cmdDir,
                   cmdCd,

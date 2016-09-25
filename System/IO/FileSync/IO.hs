@@ -27,8 +27,8 @@ getFileSize fp = do
 
 -- |Copies a directory (or a file) recursively. Tries to copy permissions.
 --  Does not handle exceptions. The target directory will be created if it does not exist.
-copyDirectory :: FilePath -> FilePath -> IO ()
-copyDirectory src trg = copyRec ""
+copyDirectory :: Exclusions -> FilePath -> FilePath -> IO ()
+copyDirectory excl src trg = copyRec ""
    where
       -- Tries to copy a directory. Fails (safely) if (sPath </> path) is not a directory.
       go :: FilePath -> IO ()
@@ -51,9 +51,13 @@ copyDirectory src trg = copyRec ""
                                  isInvalidArgumentError]
                                 (go path)
                                 (do --traceM ("[directoryStructureMatches] failed, copying file instead.")
-                                    copyFile (src </> path) (trg </> path)
+                                    when (not (exactMemberST $ path))
+                                       (copyFile (src </> path) (trg </> path))
                                     --traceM ("[directoryStructureMatches] success at copyFile.")
                                  )
+
+copyFile :: Exclusions -> FilePath -> FilePath -> IO ()
+copyFile
 
 -- |Returns True iff an 'IOError' is of type 'InappropriateType'. GHC-specific.
 isInappropriateTypeError :: IOError -> Bool

@@ -56,32 +56,46 @@ cli = do
          (dirAsker "Enter source directory: ")
          (dirAsker "Enter target directory: ")
          joinStrategyAsker
-         (\_ src' trg' (_,strat) -> do
-             exclusions <- _appStateExclusions <$> get
-             let filtF = flip elem exclusions . normalise . _fileTreeDataPath . fst
-                 src = LR src'
-                 trg = RR trg'
-             diff <- liftIO $ runEitherT (createDiffTree src trg)
+         (\_ src' trg' (_,strat) -> sync src' trg' strat)
 
-             case diff of
-                (Left errs) -> do
-                  let errs' = F.toList $ fmap (fromFTD) errs
-                  liftIO $ putStrLn ("There were file/directory-conflicts." :: String)
-                  liftIO $ putStrLn ("The following entries were present as files in one" :: String)
-                  liftIO $ putStrLn ("place and as directories in another:" :: String)
-                  liftIO $ putStrLn ("" :: String)
-                  liftIO $ mapM_ putStrLn errs'
-                  liftIO $ putStrLn ("" :: String)
-                  liftIO $ putStrLn ("Use ':rename' to rename the conflicting files." :: String)
-                  modify (\s -> s{_appStateConflicts = errs', _appStateLastDirs = Just (src', trg')})
-                (Right diff') -> do
-                  let actions = syncForests strat src trg (filterForest filtF diff')
-                  liftIO
-                     (actions
-                      Con.=$= askSummaryJoin src trg
-                      Con.=$= reportSummaryJoin
-                      Con.$$ performSummaryJoin src trg)
-                  clearConflicts)
+      cmdReplicate :: Cmd
+      cmdReplicate = makeCommandN
+         ":[r]eplicate"
+         (defCommandTest [":r", ":replicate"])
+         "Replicates a master onto multiple slaves."
+         True
+         [dirAsker "Enter master directory: ",
+          dirAsker "Enter slave directory: "]
+         (map (\i -> $ dirAsker "Enter slave directory " ++ show i ++ ": ") [2..])
+         (\_ (master:slaves) -> mapM_ (flip (syncLeft master) summaryLeftJoin) slaves)
+
+      snyc start = do
+         exclusions <- _appStateExclusions <$> get
+         let filtF = flip elem exclusions . normalise . _fileTreeDataPath . fst
+            src = LR src'
+            trg = RR trg'
+         diff <- liftIO $ runEitherT (createDiffTree src trg)
+
+         case diff of
+            (Left errs) -> do
+            let errs' = F.toList $ fmap (fromFTD) errs
+               liftIO $ putStrLn ("There were file/directory-conflicts." :: String)
+               liftIO $ putStrLn ("The following entries were present as files in one" :: String)
+               liftIO $ putStrLn ("place and as directories in another:" :: String)
+               liftIO $ putStrLn ("" :: String)
+               liftIO $ mapM_ putStrLn errs'
+               liftIO $ putStrLn ("" :: String)
+               liftIO $ putStrLn ("Use ':rename' to rename the conflicting files." :: String)
+               modify (\s -> s{_appStateConflicts = errs', _appStateLastDirs = Just (src', trg')})
+            (Right diff') -> do
+            let actions = syncForests strat src trg (filterForest filtF diff')
+            liftIO
+               (actions
+                Con.=$= askSummaryJoin src trg
+                Con.=$= reportSummaryJoin
+                Con.$$ performSummaryJoin src trg)
+            clearConflicts
+
 
       cmdList :: Cmd
       cmdList = makeCommand

@@ -1,3 +1,4 @@
+-- |Logic for renaming files in case of filename collisions.
 module System.IO.FileSync.Rename where
 
 import Control.Monad

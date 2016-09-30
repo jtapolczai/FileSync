@@ -1,3 +1,4 @@
+-- |Mock versions of IO functions. These do nothing except print info to stdout.
 module System.IO.Mock (
    copyFile,
    removeFile,

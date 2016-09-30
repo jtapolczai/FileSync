@@ -151,3 +151,4 @@ traverseM f st (TreeT m) = TreeT $ do
 -- |Collects just the leaves of a tree. Convenience function.
 justLeaves :: (n -> a) -> T.Tree n -> [a]
 justLeaves f = leaves (const f) undefined undefined
+

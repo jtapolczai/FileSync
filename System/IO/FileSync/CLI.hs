@@ -20,9 +20,11 @@ import qualified Data.Set as St
 import qualified Data.Text as T
 import System.Directory
 import System.FilePath
+import System.IO (hPutStrLn, stderr)
 import System.IO.FileSync.Join
 import System.IO.FileSync.JoinStrategies
 import System.IO.FileSync.Rename
+import System.IO.FileSync.Settings
 import System.IO.FileSync.Sync
 import System.IO.FileSync.Types
 import System.REPL
@@ -35,7 +37,8 @@ import Debug.Trace
 data AppState = AppState {
    _appStateExclusions :: HS.Set FilePath,
    _appStateLastDirs :: Maybe (FilePath, FilePath),
-   _appStateConflicts :: [FilePath]
+   _appStateConflicts :: [FilePath],
+   _appStateSettings :: AppSettings
    }
 
 type Cmd = Command (StateT AppState IO) T.Text ()
@@ -43,12 +46,17 @@ type Cmd = Command (StateT AppState IO) T.Text ()
 -- |Main command-line interface, in REPL-form.
 cli :: IO ()
 cli = do
+   (settings, err) <- readAppSettings
+   case err of
+      Nothing -> return ()
+      Just err' -> hPutStrLn stderr err'
+
    putStrLn ("FileSync v0.2" :: T.Text)
    putStrLn ("Sync directory trees." :: T.Text)
    putStrLn ("Enter :h or :help for a list of commands." :: T.Text)
    putStrLn ("Enter :exit to exit the program." :: T.Text)
    putStrLn ("" :: T.Text)
-   evalStateT repl (AppState (HS.empty) Nothing [])
+   evalStateT repl (AppState (HS.empty) Nothing [] settings)
    where
       repl = makeREPLSimple commands
 
@@ -85,6 +93,7 @@ cli = do
 
       sync src' trg' strat = do
          exclusions <- _appStateExclusions <$> get
+         settings <- _appStateSettings <$> get
          let src = LR src'
              trg = RR trg'
          diff <- liftIO $ runEitherT (createDiffTree src trg)
@@ -102,8 +111,11 @@ cli = do
                modify (\s -> s{_appStateConflicts = errs', _appStateLastDirs = Just (src', trg')})
             (Right diff') -> do
                let actions = syncForests strat src trg diff'
+                   askConduit = if _appSettingsShowFileActions settings
+                                then askSummaryJoin src trg
+                                else dontAskSummaryJoin src trg
                liftIO (actions
-                       Con.=$= askSummaryJoin src trg
+                       Con.=$= askConduit
                        Con.=$= reportSummaryJoin
                        Con.$$ performSummaryJoin src trg)
                clearConflicts
@@ -239,3 +251,4 @@ normalise' = map (replace '\\' '/') . normalise
    where
       replace x y z | x == z = y
                     | otherwise = z
+

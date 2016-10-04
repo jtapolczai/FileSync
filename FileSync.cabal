@@ -27,6 +27,7 @@ library
                        System.IO.FileSync.Join,
                        System.IO.FileSync.JoinStrategies,
                        System.IO.FileSync.Rename,
+                       System.IO.FileSync.Settings,
                        System.IO.FileSync.STM.Utils,
                        System.IO.FileSync.Sync,
                        System.IO.FileSync.Types,

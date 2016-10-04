@@ -16,6 +16,7 @@ module System.IO.FileSync.JoinStrategies (
    -- ** Utility functions for summary joins
    performFileAction,
    askSummaryJoin,
+   dontAskSummaryJoin,
    reportSummaryJoin,
    performSummaryJoin,
    showFileAction,
@@ -94,7 +95,7 @@ summaryOuterJoin = summaryJoin (return . Just . Copy LeftSide)
                                (const $ return Nothing)
 
 -- |Prints a summary of actions to be done and asks the user whether to proceed.
---  If the user enters "yes", the file consumed file actions are yielded back.
+--  If the user enters "yes", the consumed file actions are yielded back.
 --  Otherwise, nothing is yielded.
 --
 --  Note that this function lists all actions to be done and therefore
@@ -115,6 +116,22 @@ askSummaryJoin lr rr = do
       mapM_ (Con.yield . Right) actions
    else
       liftIO $ putStrLn "Doing nothing."
+
+-- |Prints a header about the actions to be performed and yields them all back.
+
+--  Note that this function yields the number of actions to be done and therefore
+--  pulls them all into memory.
+dontAskSummaryJoin :: LeftRoot -> RightRoot -> Con.Conduit FileAction IO (Either Int FileAction)
+dontAskSummaryJoin lr rr = do
+   actions <- ConL.consume
+   let total = length actions
+   liftIO $ putStrLn $ "You are about to perform the following " ++ show total ++ " operations:"
+   liftIO $ putStrLn $ "Left directory: " ++ getFilePath lr
+   liftIO $ putStrLn $ "Right directory: " ++ getFilePath rr
+   liftIO $ putStrLn "Performing actions..."
+   Con.yield (Left $ length actions)
+   mapM_ (Con.yield . Right) actions
+
 
 -- |Passes through 'FileAction's unchanged, but prints each to the CLI.
 reportSummaryJoin
